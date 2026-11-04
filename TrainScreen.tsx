@@ -1,6 +1,7 @@
 import { View, Text, TextInput, TouchableOpacity } from "react-native";
 import { useState, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { parseWorkouts } from "./storage";
 
 export default function TrainScreen() {
   const [workout, setWorkout] = useState("");
@@ -9,7 +10,7 @@ export default function TrainScreen() {
   const saveWorkout = async () => {
     try {
       const existing = await AsyncStorage.getItem("workouts");
-      const workouts = existing ? JSON.parse(existing) : [];
+      const workouts = parseWorkouts(existing);
 
       const today = new Date().toDateString();
 
@@ -35,7 +36,7 @@ export default function TrainScreen() {
   const loadWorkout = async () => {
     try {
       const existing = await AsyncStorage.getItem("workouts");
-      const workouts = existing ? JSON.parse(existing) : [];
+      const workouts = parseWorkouts(existing);
 
       const today = new Date().toDateString();
 
