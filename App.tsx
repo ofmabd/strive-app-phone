@@ -9,18 +9,55 @@ import * as Haptics from "expo-haptics";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import TrainScreen from "./TrainScreen";
+import type { CompositeScreenProps, NavigatorScreenParams } from "@react-navigation/native";
+import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
+import { parseScores, parseWorkouts } from "./storage";
+
+type Recommendation = "MAINTAIN" | "PUSH" | "RECOVER";
+
+type TabParamList = {
+  Home: {
+    score: number;
+    recommendation: Recommendation;
+    sleep: number | null;
+    energy: number | null;
+    soreness: number | null;
+    intensity: number | null;
+  } | undefined;
+  Train: undefined;
+  Recover: undefined;
+  Profile: undefined;
+};
+
+type RootStackParamList = {
+  Checkin: undefined;
+  Main: NavigatorScreenParams<TabParamList>;
+};
+
+type CheckinScreenProps = NativeStackScreenProps<RootStackParamList, "Checkin">;
+type DashboardScreenProps = CompositeScreenProps<
+  BottomTabScreenProps<TabParamList, "Home">,
+  NativeStackScreenProps<RootStackParamList, "Main">
+>;
+
+type MetricProps = {
+  label: string;
+  value: number | null;
+  setValue: (value: number) => void;
+};
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
-const Stack = createNativeStackNavigator();
-const Tab = createBottomTabNavigator();
+const Stack = createNativeStackNavigator<RootStackParamList>();
+const Tab = createBottomTabNavigator<TabParamList>();
 
-function CheckinScreen({ navigation }) {
+function CheckinScreen({ navigation }: CheckinScreenProps) {
   const [sleep, setSleep] = useState<number | null>(null);
   const [energy, setEnergy] = useState<number | null>(null);
   const [soreness, setSoreness] = useState<number | null>(null);
   const [intensity, setIntensity] = useState<number | null>(null);
 
-  const Metric = ({ label, value, setValue }) => (
+  const Metric = ({ label, value, setValue }: MetricProps) => (
   <View style={{ marginBottom: 28 }}>
     <Text
       style={{
@@ -89,14 +126,14 @@ function CheckinScreen({ navigation }) {
     const score = calculateScore();
     if (score === null) return;
 
-    let recommendation = "MAINTAIN";
+    let recommendation: Recommendation = "MAINTAIN";
     if (score >= 80) recommendation = "PUSH";
     else if (score < 50) recommendation = "RECOVER";
 
   const saveScore = async () => {
     try {
       const existing = await AsyncStorage.getItem("scores");
-      const scores = existing ? JSON.parse(existing) : [];
+      const scores = parseScores(existing);
 
       const today = new Date().toDateString();
 
@@ -178,7 +215,7 @@ function CheckinScreen({ navigation }) {
   );
 }
 
-function DashboardScreen({ route, navigation }) {
+function DashboardScreen({ route, navigation }: DashboardScreenProps) {
   const score = route.params?.score ?? 0;
   const recommendation = route.params?.recommendation ?? "MAINTAIN";
 
@@ -229,7 +266,7 @@ useEffect(() => {
   const loadTrend = async () => {
     try {
       const existing = await AsyncStorage.getItem("scores");
-      const scores = existing ? JSON.parse(existing) : [];
+      const scores = parseScores(existing);
 
       let currentStreak = 0;
 
@@ -238,7 +275,7 @@ useEffect(() => {
         const now = new Date();
 
         const diffDays = Math.floor(
-          (now - entryDate) / (1000 * 60 * 60 * 24)
+          (now.getTime() - entryDate.getTime()) / (1000 * 60 * 60 * 24)
         );
 
         if (diffDays === currentStreak) {
@@ -252,7 +289,7 @@ useEffect(() => {
 
       const today = new Date().toDateString();
       const workoutData = await AsyncStorage.getItem("workouts");
-      const workouts = workoutData ? JSON.parse(workoutData) : [];
+      const workouts = parseWorkouts(workoutData);
 
       const todayWorkoutEntry = workouts.find(
         (item) => item?.date === today
