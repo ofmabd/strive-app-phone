@@ -1,6 +1,6 @@
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from "react-native";
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Alert } from "react-native";
 import { useCallback, useState } from "react";
 import Svg, { Circle } from "react-native-svg";
 import { useFocusEffect, useIsFocused } from "@react-navigation/native";
@@ -13,8 +13,11 @@ import TrainScreen from "./TrainScreen";
 import type { CompositeScreenProps, NavigatorScreenParams } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
-import { parseScores, parseWorkouts } from "./storage";
+import { parseWorkouts } from "./storage";
+import { createScoreStore } from "./scoreStorage";
 import type { ScoreEntry } from "./storage";
+
+const scoreStore = createScoreStore(AsyncStorage);
 
 type Recommendation = "MAINTAIN" | "PUSH" | "RECOVER";
 
@@ -131,30 +134,14 @@ function CheckinScreen({ navigation }: CheckinScreenProps) {
     if (score >= 80) recommendation = "PUSH";
     else if (score < 50) recommendation = "RECOVER";
 
-  const saveScore = async () => {
     try {
-      const existing = await AsyncStorage.getItem("scores");
-      const scores = parseScores(existing);
-
-      const today = new Date().toDateString();
-
-      const existingIndex = scores.findIndex(
-        (item) => item?.date === today
-      );
-
-      if (existingIndex !== -1) {
-        scores[existingIndex] = { date: today, score };
-      } else {
-        scores.push({ date: today, score });
-      }
-
-      await AsyncStorage.setItem("scores", JSON.stringify(scores));
-    } catch (e) {
-      console.log("Error saving score", e);
+      await scoreStore.save({ date: new Date().toDateString(), score });
+    } catch (error) {
+      console.log("Error saving score", error);
+      Alert.alert("Check-in not saved", "Your score could not be saved and verified. Please try again. Recovery backups are preserved.");
+      return;
     }
-  };
-
-  await saveScore();
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
     navigation.navigate("Main", {
       screen: "Home",
@@ -197,7 +184,6 @@ function CheckinScreen({ navigation }: CheckinScreenProps) {
 
       <TouchableOpacity
         onPress={() => {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           handleSubmit();
         }}
         style={{
@@ -239,10 +225,7 @@ function DashboardScreen({ route, navigation }: DashboardScreenProps) {
     // Read independently so a damaged payload does not hide the other section.
     const loadScores = async () => {
       try {
-        const entries = parseScores(await AsyncStorage.getItem("scores"));
-        if (entries.some((entry) => entry.score < 0 || entry.score > 100)) {
-          throw new Error("Saved readiness score is outside the 0–100 range.");
-        }
+        const entries = await scoreStore.load();
         if (active) {
           setScores(entries);
           setScoresError(false);
