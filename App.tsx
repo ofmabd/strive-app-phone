@@ -1,10 +1,10 @@
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Alert } from "react-native";
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Alert, useWindowDimensions } from "react-native";
 import { useCallback, useState } from "react";
-import Svg, { Circle } from "react-native-svg";
+import Svg, { Circle, Path } from "react-native-svg";
 import { useFocusEffect, useIsFocused } from "@react-navigation/native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import * as Haptics from "expo-haptics";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
@@ -279,6 +279,10 @@ function DashboardScreen({ route, navigation }: DashboardScreenProps) {
       score: scores.find((entry) => entry.date === date.toDateString())?.score,
     };
   });
+  const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const ringSize = Math.min(score === undefined && !loading ? 160 : 220,
+    width - insets.left - insets.right - 48);
   const radius = 94;
   const circumference = 2 * Math.PI * radius;
 
@@ -295,10 +299,10 @@ function DashboardScreen({ route, navigation }: DashboardScreenProps) {
 
         <View style={dashboardStyles.readiness}>
           <Text style={dashboardStyles.eyebrow}>DAILY READINESS</Text>
-          <View style={dashboardStyles.ring}
+          <View style={[dashboardStyles.ring, { width: ringSize, minHeight: ringSize }]}
             accessible accessibilityLabel={loading ? "Loading readiness" : scoresError
               ? "Readiness unavailable" : score === undefined ? "No check-in today" : `Readiness ${score} out of 100`}>
-            <Svg width={224} height={224} style={StyleSheet.absoluteFill} accessible={false}>
+            <Svg width={ringSize} height={ringSize} viewBox="0 0 224 224" style={dashboardStyles.ringGraphic} accessible={false}>
               <Circle cx={112} cy={112} r={radius} stroke={dashboardColors.elevated} strokeWidth={7} fill="none" />
               {score !== undefined && <Circle cx={112} cy={112} r={radius}
                 stroke={dashboardColors.sage} strokeWidth={7} fill="none"
@@ -306,7 +310,7 @@ function DashboardScreen({ route, navigation }: DashboardScreenProps) {
                 strokeDashoffset={circumference * (1 - score / 100)}
                 strokeLinecap="round" rotation={-90} origin="112, 112" />}
             </Svg>
-            <Text style={dashboardStyles.score}>{loading ? "…" : score ?? "—"}</Text>
+            <Text style={[dashboardStyles.score, { fontSize: score === undefined ? 48 : 64 }]}>{loading ? "…" : score ?? "—"}</Text>
             <Text style={dashboardStyles.scoreCaption}>{score === undefined ? "AWAITING CHECK-IN" : "OUT OF 100"}</Text>
           </View>
           <Text style={dashboardStyles.recommendation} accessibilityRole="header">
@@ -371,12 +375,13 @@ function DashboardScreen({ route, navigation }: DashboardScreenProps) {
 const dashboardStyles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: dashboardColors.background },
   content: { paddingHorizontal: 24, paddingTop: 20, paddingBottom: 32, width: "100%", maxWidth: 560, alignSelf: "center" },
-  header: { gap: 8, paddingBottom: 30, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "#41494C" },
+  header: { gap: 8, paddingBottom: 20, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "#41494C" },
   brand: { color: dashboardColors.text, fontSize: 16, fontWeight: "700", letterSpacing: 3 },
   date: { color: dashboardColors.secondary, fontSize: 14, lineHeight: 21 },
-  readiness: { alignItems: "center", paddingTop: 30, paddingBottom: 26 },
+  readiness: { alignItems: "center", paddingTop: 20, paddingBottom: 20 },
   eyebrow: { color: dashboardColors.secondary, fontSize: 12, fontWeight: "600", letterSpacing: 2 },
-  ring: { width: 224, minHeight: 224, alignItems: "center", justifyContent: "center", marginVertical: 12 },
+  ring: { alignItems: "center", justifyContent: "center", marginVertical: 4 },
+  ringGraphic: { position: "absolute", alignSelf: "center" },
   score: { color: dashboardColors.text, fontSize: 68, fontWeight: "500", letterSpacing: -3, fontVariant: ["tabular-nums"] },
   scoreCaption: { color: dashboardColors.secondary, fontSize: 10, letterSpacing: 1.2, marginTop: 2 },
   recommendation: { color: dashboardColors.sage, fontSize: 24, fontWeight: "600", textAlign: "center", letterSpacing: 0.5 },
@@ -405,24 +410,40 @@ const dashboardStyles = StyleSheet.create({
   dayNumber: { color: dashboardColors.secondary, fontSize: 11, fontVariant: ["tabular-nums"] },
 });
 
+// A single 24-point outline vocabulary, rendered with the existing SVG dependency.
+const tabIconPaths: Record<keyof TabParamList, string> = {
+  Home: "M3 10 12 3l9 7v11h-6v-7H9v7H3Z",
+  Train: "M6 5v14M3 8v8M18 5v14M21 8v8M6 12h12",
+  Recover: "M20 4C11 3 4 7 4 13a7 7 0 0 0 7 7c6 0 10-7 9-16ZM4 20 15 9",
+  Profile: "M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM4 21v-2a8 8 0 0 1 16 0v2",
+};
+
+function TabIcon({ name, color, size }: { name: keyof TabParamList; color: string; size: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" accessible={false}>
+      <Path d={tabIconPaths[name]} fill="none" stroke={color} strokeWidth={1.7}
+        strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
 function TabNavigator() {
   return (
     <Tab.Navigator
-      screenOptions={{
+      screenOptions={({ route }) => ({
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: "#0b0b0b",
-          borderTopColor: "#1a1a1a",
+          backgroundColor: dashboardColors.background,
+          borderTopColor: "#41494C",
         },
-        tabBarActiveTintColor: "#00ff88",
-        tabBarInactiveTintColor: "#888",
-      }}
-    >
-      <Tab.Screen name="Home" component={DashboardScreen} options={{
         tabBarActiveTintColor: dashboardColors.sage,
         tabBarInactiveTintColor: dashboardColors.secondary,
-        tabBarStyle: { backgroundColor: dashboardColors.background, borderTopColor: "#41494C" },
-      }} />
+        tabBarItemStyle: { minHeight: 48 },
+        tabBarAccessibilityLabel: route.name,
+        tabBarIcon: ({ color, size }) => <TabIcon name={route.name} color={color} size={size} />,
+      })}
+    >
+      <Tab.Screen name="Home" component={DashboardScreen} />
       
       <Tab.Screen name="Train" component={TrainScreen} />
 
