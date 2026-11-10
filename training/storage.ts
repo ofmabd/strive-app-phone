@@ -1,3 +1,5 @@
+import { finishWorkout } from "./manual";
+import { MUSCLES, EXERCISE_EQUIPMENT, BUILT_IN_EXERCISES } from "./catalog";
 import { isCompletedWorkout, parseLocalDate, weekStart } from "./consistency";
 import type { Exercise, TrainingData, TrainingProfile, RecordMetadata, WorkoutSession } from "./types";
 
@@ -41,6 +43,8 @@ function profile(value: unknown) {
 }
 function exercise(value: unknown) {
   metadata(value); text(value.name); check(value.source === "built_in" || value.source === "custom");
+  if (value.primaryMuscle !== undefined) check(MUSCLES.some((item) => item === value.primaryMuscle));
+  if (value.equipment !== undefined) check(EXERCISE_EQUIPMENT.some((item) => item === value.equipment));
 }
 function session(value: unknown) {
   metadata(value); text(value.name); day(value.startedOn); timer(value.timer);
@@ -133,14 +137,15 @@ export function createTrainingStore(storage: Storage) {
     try { value = JSON.parse(raw); } catch { throw new Error("Malformed training JSON; stored data was not reset."); }
     return { raw, data: validateTrainingData(value) };
   }
-  function update(mutator: (data: TrainingData) => void) {
+  function update<T>(mutator: (data: TrainingData) => T): Promise<T> {
     return serialize(async () => {
       const { raw, data } = await read();
-      mutator(data); validateTrainingData(data);
+      const result = mutator(data); validateTrainingData(data);
       const next = JSON.stringify(data);
       if (await storage.getItem(TRAINING_KEY) !== raw) throw new Error("Training data changed externally. Retry.");
-      await storage.setItem(TRAINING_KEY, next);
+      if (raw !== next) await storage.setItem(TRAINING_KEY, next);
       if (await storage.getItem(TRAINING_KEY) !== next) throw new Error("Training persistence could not be verified. Retry before reporting success.");
+      return result;
     });
   }
   function snapshot(data: TrainingData, date: string, capturedAt: string) {
@@ -173,6 +178,38 @@ export function createTrainingStore(storage: Storage) {
         if (index < 0) data.exercises.push(input); else data.exercises[index] = input;
       });
     },
+    beginManualSession: async (value: WorkoutSession, initialProfile?: TrainingProfile): Promise<WorkoutSession> => {
+      session(value);
+      check(value.status === "active" && value.source === "manual");
+      const input = copy(value);
+      const proposedProfile = initialProfile ? copy(initialProfile) : undefined;
+      return update((data) => {
+        const existing = data.sessions.find((item) => item.status === "draft" || item.status === "active");
+        if (existing) return existing;
+        if (data.sessions.some((item) => item.id === input.id)) throw new Error("Session ID already used.");
+        if (data.profile === null) {
+          if (!proposedProfile) throw new Error("Choose a weekly target before starting.");
+          profile(proposedProfile); data.profile = proposedProfile;
+        }
+        const knownIds = new Set([...BUILT_IN_EXERCISES, ...data.exercises].map((item) => item.id));
+        check(input.exercises.length > 0 && input.exercises.every((item) => knownIds.has(item.exerciseId)));
+        snapshot(data, input.startedOn, input.createdAt);
+        data.sessions.push(input);
+        return input;
+      });
+    },
+    finishSession: (id: string, expectedUpdatedAt: string, now: string): Promise<WorkoutSession> => update((data) => {
+      const index = data.sessions.findIndex((item) => item.id === id);
+      if (index < 0) throw new Error("Workout not found.");
+      const current = data.sessions[index];
+      if (current.status === "completed") return current; // Retry after an uncertain acknowledgement.
+      if (current.updatedAt !== expectedUpdatedAt) throw new Error("Workout changed before finishing. Reopen it before trying again.");
+      const completed = finishWorkout(current, now);
+      if (completed.status !== "completed") throw new Error("Workout could not be finished.");
+      snapshot(data, completed.completedOn, now);
+      data.sessions[index] = completed;
+      return completed;
+    }),
     saveSession: async (value: WorkoutSession) => {
       session(value);
       const input = copy(value);

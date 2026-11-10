@@ -28,7 +28,12 @@ export type TrainingProfile = RecordMetadata & {
   timer: TimerPreferences;
   setupStatus: "skipped" | "in_progress" | "complete";
 };
+export type MuscleGroup = "chest" | "back" | "shoulders" | "quadriceps" | "hamstrings" | "glutes" | "arms" | "calves" | "core" | "full_body";
+export type ExerciseEquipment = "barbell" | "dumbbell" | "machine" | "cable" | "bodyweight" | "resistance_band" | "kettlebell";
 export type Exercise = RecordMetadata & {
+  // Optional only for catalog records saved before exercise metadata existed.
+  primaryMuscle?: MuscleGroup;
+  equipment?: ExerciseEquipment;
   name: string;
   source: "built_in" | "custom";
 };

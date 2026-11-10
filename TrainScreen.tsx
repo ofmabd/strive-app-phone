@@ -116,7 +116,7 @@ export default function TrainScreen({ navigation }: Props) {
           <Pressable accessibilityRole="button" style={[styles.button, styles.outline]} onPress={() => navigation.navigate("WorkoutHistory")}>
             <Text style={styles.buttonText}>Workout history</Text>
           </Pressable>
-          <Text style={styles.body}>Workout creation, logging and history views are coming in later milestones.</Text>
+          <Text style={styles.body}>Manual workout logging is available now. Suggestions and the full history view are coming in later milestones.</Text>
           <Pressable accessibilityRole="button" style={styles.link} onPress={() => navigation.navigate("TrainingSetup")}>
             <Text style={styles.linkText}>{hasCompletedSetup(data?.profile ?? null) ? "Edit training setup" : "Training setup · optional"}</Text>
           </Pressable>
