@@ -9,36 +9,14 @@ import { StatusBar } from "expo-status-bar";
 import * as Haptics from "expo-haptics";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import TrainScreen from "./TrainScreen";
-import type { CompositeScreenProps, NavigatorScreenParams } from "@react-navigation/native";
+import TrainingNavigator from "./training/TrainingNavigator";
+import type { CompositeScreenProps } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import { parseWorkouts } from "./storage";
-import { createScoreStore } from "./scoreStorage";
+import { scoreStore } from "./appStores";
+import type { Recommendation, TabParamList, RootStackParamList } from "./navigationTypes";
 import type { ScoreEntry } from "./storage";
-
-const scoreStore = createScoreStore(AsyncStorage);
-
-type Recommendation = "MAINTAIN" | "PUSH" | "RECOVER";
-
-type TabParamList = {
-  Home: {
-    score: number;
-    recommendation: Recommendation;
-    sleep: number | null;
-    energy: number | null;
-    soreness: number | null;
-    intensity: number | null;
-  } | undefined;
-  Train: undefined;
-  Recover: undefined;
-  Profile: undefined;
-};
-
-type RootStackParamList = {
-  Checkin: undefined;
-  Main: NavigatorScreenParams<TabParamList>;
-};
 
 type CheckinScreenProps = NativeStackScreenProps<RootStackParamList, "Checkin">;
 type DashboardScreenProps = CompositeScreenProps<
@@ -445,7 +423,7 @@ function TabNavigator() {
     >
       <Tab.Screen name="Home" component={DashboardScreen} />
       
-      <Tab.Screen name="Train" component={TrainScreen} />
+      <Tab.Screen name="Train" component={TrainingNavigator} />
 
       <Tab.Screen
         name="Recover"

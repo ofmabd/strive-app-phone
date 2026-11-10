@@ -1,0 +1,26 @@
+import { StyleSheet } from "react-native";
+export const colors = { paper: "#F2F0EA", ink: "#15191C", elevated: "#23292B", sage: "#B9C9A5", muted: "#515C5F", line: "#D0D2C9" };
+export const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.paper },
+  content: { width: "100%", maxWidth: 560, alignSelf: "center", padding: 24, paddingBottom: 40, gap: 24 },
+  eyebrow: { color: colors.muted, fontSize: 12, fontWeight: "600", letterSpacing: 1.7 },
+  title: { color: colors.ink, fontSize: 30, lineHeight: 38, fontWeight: "600" },
+  heading: { color: colors.ink, fontSize: 20, lineHeight: 28, fontWeight: "600" },
+  body: { color: colors.muted, fontSize: 16, lineHeight: 24 },
+  card: { backgroundColor: colors.ink, borderRadius: 12, padding: 22, gap: 14 },
+  light: { color: colors.paper },
+  sage: { color: colors.sage },
+  count: { color: colors.paper, fontSize: 36, fontWeight: "600", fontVariant: ["tabular-nums"] },
+  cardBody: { color: "#C4CBC9", fontSize: 15, lineHeight: 23 },
+  section: { gap: 12 },
+  button: { minHeight: 52, justifyContent: "center", paddingHorizontal: 18, paddingVertical: 14, borderRadius: 8, backgroundColor: colors.sage },
+  buttonText: { color: colors.ink, fontSize: 16, fontWeight: "600" },
+  outline: { backgroundColor: "transparent", borderWidth: 1, borderColor: colors.line },
+  link: { minHeight: 48, justifyContent: "center", alignSelf: "flex-start", paddingVertical: 12, paddingRight: 16 },
+  linkText: { color: colors.ink, fontSize: 15, fontWeight: "600", textDecorationLine: "underline" },
+  error: { color: "#8B302A", fontSize: 15, lineHeight: 23 },
+  option: { minHeight: 56, padding: 18, borderWidth: 1, borderColor: colors.line, borderRadius: 8, justifyContent: "center" },
+  selected: { backgroundColor: colors.sage, borderColor: colors.ink },
+  disabled: { opacity: 0.45 },
+  divider: { borderTopWidth: 1, borderTopColor: colors.line, paddingTop: 24, gap: 12 },
+});
