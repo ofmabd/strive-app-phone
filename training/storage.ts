@@ -1,3 +1,4 @@
+import { clearRestTimer } from "./restTimer";
 import { finishWorkout } from "./manual";
 import { MUSCLES, EXERCISE_EQUIPMENT, BUILT_IN_EXERCISES } from "./catalog";
 import { isCompletedWorkout, parseLocalDate, weekStart } from "./consistency";
@@ -69,6 +70,23 @@ function session(value: unknown) {
     }
   }
   unique(exerciseIds); unique(setIds);
+  if (value.restTimer !== undefined) {
+    check(value.status === "active" || value.status === "draft");
+    check((value.timer as Record<string, unknown>).mode !== "off");
+    record(value.restTimer);
+    integer(value.restTimer.durationSeconds);
+    check(Number.isSafeInteger((value.restTimer.durationSeconds as number) * 1000));
+    if (value.restTimer.triggerSetId !== undefined) {
+      text(value.restTimer.triggerSetId); check(setIds.includes(value.restTimer.triggerSetId));
+    }
+    if (value.restTimer.status === "running") {
+      instant(value.restTimer.deadlineAt); check(!("remainingMs" in value.restTimer));
+    } else {
+      check(value.restTimer.status === "paused"); integer(value.restTimer.remainingMs, 0);
+      check((value.restTimer.remainingMs as number) <= (value.restTimer.durationSeconds as number) * 1000);
+      check(!("deadlineAt" in value.restTimer));
+    }
+  }
   list(value.adjustments);
   const adjustmentIds: string[] = [];
   for (const adjustment of value.adjustments) {
@@ -211,6 +229,7 @@ export function createTrainingStore(storage: Storage) {
       return completed;
     }),
     saveSession: async (value: WorkoutSession) => {
+      if (value.status === "completed" || value.status === "discarded") value = clearRestTimer(value);
       session(value);
       const input = copy(value);
       return update((data) => {

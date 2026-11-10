@@ -8,6 +8,14 @@ export type TimerPreferences = {
 };
 export const DEFAULT_TIMER: Readonly<TimerPreferences> = { mode: "automatic", durationSeconds: 90 };
 
+export type RestTimerState = {
+  durationSeconds: number;
+  triggerSetId?: string;
+} & (
+  | { status: "running"; deadlineAt: string }
+  | { status: "paused"; remainingMs: number }
+);
+
 export type RecordMetadata = {
   id: string;
   schemaVersion: 1;
@@ -72,6 +80,7 @@ export type WorkoutSession = RecordMetadata & {
   startedOn: LocalDate;
   exercises: SessionExercise[];
   timer: TimerPreferences;
+  restTimer?: RestTimerState; // Missing on older drafts or when skipped/off/finalized.
   readiness: ReadinessSnapshot;
   adjustments: TrainingAdjustment[];
 } & (

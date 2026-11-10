@@ -8,6 +8,7 @@ import type { TrainStackParamList } from "./navigationTypes";
 import type { TrainingData, WorkoutSession } from "./types";
 import { createSessionAutosave } from "./autosave";
 import { addExercise, addSet, displayWeight, editSet, finishSummary, previousPerformance, removeExercise, removeSet, toggleSet } from "./manual";
+import RestTimer from "./RestTimer";
 import ExercisePicker from "./ExercisePicker";
 import { styles } from "./styles";
 import { manualStyles as ui } from "./manualStyles";
@@ -81,7 +82,8 @@ function SessionEditor({ initial, data, navigation }: { initial: WorkoutSession;
       const saved = draft.getSnapshot().session;
       await trainingStore.finishSession(saved.id, saved.updatedAt, new Date().toISOString());
       finishingRef.current = false; setFinishing(false);
-      if (navigation.isFocused()) navigation.popTo("TrainHome");
+      // Pop this Train stack even if the user switched tabs during verification.
+      navigation.popTo("TrainHome");
     } catch (cause) {
       setFinishError(cause instanceof Error ? cause.message : "Completion could not be verified.");
     } finally { finishingRef.current = false; setFinishing(false); }
@@ -112,6 +114,7 @@ function SessionEditor({ initial, data, navigation }: { initial: WorkoutSession;
           </Text>
           {state.error && <Pressable accessibilityRole="button" disabled={finishing} style={styles.button} onPress={() => { void draft.flush().catch(() => {}); }}><Text style={styles.buttonText}>Retry saving edits</Text></Pressable>}
         </View>
+        <RestTimer session={state.session} disabled={blocked} edit={edit} />
         {state.session.exercises.length === 0 && <Text style={styles.body}>No exercises remain. Add an exercise to continue; this unfinished workout does not count toward consistency.</Text>}
         {state.session.exercises.map((movement) => {
           const open = expanded.has(movement.id);

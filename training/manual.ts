@@ -1,4 +1,5 @@
 import { localDate } from "./consistency";
+import { automaticRest, cancelSetRest, clearRestTimer } from "./restTimer";
 import { DEFAULT_TIMER } from "./types";
 import type { Exercise, ExerciseEquipment, MuscleGroup, ReadinessSnapshot, TrainingProfile, WeeklyTarget, WeightUnit, WorkoutSession, WorkoutSet } from "./types";
 let sequence = 0;
@@ -39,10 +40,10 @@ function changeSet(session: WorkoutSession, movementId: string, setId: string, n
   return { ...session, exercises, updatedAt: now };
 }
 export function editSet(session: WorkoutSession, movementId: string, setId: string, field: "reps" | "weight", text: string, now: string): WorkoutSession {
-  return changeSet(session, movementId, setId, now, (set) => ({ ...set, updatedAt: now, completed: false, reps: null, weightKg: null, draft: { ...set.draft, [field]: text } }));
+  return cancelSetRest(changeSet(session, movementId, setId, now, (set) => ({ ...set, updatedAt: now, completed: false, reps: null, weightKg: null, draft: { ...set.draft, [field]: text } })), setId);
 }
 export function toggleSet(session: WorkoutSession, movementId: string, setId: string, now: string): WorkoutSession {
-  return changeSet(session, movementId, setId, now, (set) => {
+  const next = changeSet(session, movementId, setId, now, (set) => {
     if (set.completed) return { ...set, completed: false, updatedAt: now };
     if (!/^\d+$/.test(set.draft.reps.trim())) throw new Error("Enter a whole number of reps greater than zero.");
     const reps = Number(set.draft.reps.trim());
@@ -53,6 +54,8 @@ export function toggleSet(session: WorkoutSession, movementId: string, setId: st
     if (weightKg !== null && !Number.isFinite(weightKg)) throw new Error("Weight is too large.");
     return { ...set, completed: true, reps, weightKg, updatedAt: now };
   });
+  const completed = next.exercises.find((item) => item.id === movementId)?.sets.find((set) => set.id === setId)?.completed;
+  return completed ? automaticRest(next, setId, now) : cancelSetRest(next, setId);
 }
 export function addExercise(session: WorkoutSession, exercise: Exercise, unit: WeightUnit, now: string): WorkoutSession {
   editable(session);
@@ -61,7 +64,9 @@ export function addExercise(session: WorkoutSession, exercise: Exercise, unit: W
 }
 export function removeExercise(session: WorkoutSession, movementId: string, now: string): WorkoutSession {
   editable(session);
-  return { ...session, updatedAt: now, exercises: session.exercises.filter((item) => item.id !== movementId) };
+  const removed = session.exercises.find((item) => item.id === movementId);
+  const next = { ...session, updatedAt: now, exercises: session.exercises.filter((item) => item.id !== movementId) };
+  return removed?.sets.some((set) => set.id === session.restTimer?.triggerSetId) ? clearRestTimer(next) : next;
 }
 export function addSet(session: WorkoutSession, movementId: string, unit: WeightUnit, now: string): WorkoutSession {
   editable(session);
@@ -69,7 +74,7 @@ export function addSet(session: WorkoutSession, movementId: string, unit: Weight
 }
 export function removeSet(session: WorkoutSession, movementId: string, setId: string, now: string): WorkoutSession {
   editable(session);
-  return { ...session, updatedAt: now, exercises: session.exercises.map((item) => item.id === movementId ? { ...item, sets: item.sets.filter((set) => set.id !== setId) } : item) };
+  return cancelSetRest({ ...session, updatedAt: now, exercises: session.exercises.map((item) => item.id === movementId ? { ...item, sets: item.sets.filter((set) => set.id !== setId) } : item) }, setId);
 }
 export function finishSummary(session: WorkoutSession) {
   const sets = session.exercises.flatMap((item) => item.sets);
@@ -81,7 +86,7 @@ export function finishWorkout(session: WorkoutSession, now: string): WorkoutSess
   editable(session);
   const summary = finishSummary(session);
   if (!summary.canFinish) throw new Error("Complete at least one set before finishing.");
-  return { ...session, status: "completed", updatedAt: now, completedAt: now, completedOn: localDate(new Date(now)), finishedEarly: summary.unfinished > 0 };
+  return clearRestTimer({ ...session, status: "completed", updatedAt: now, completedAt: now, completedOn: localDate(new Date(now)), finishedEarly: summary.unfinished > 0 });
 }
 export function previousPerformance(sessions: readonly WorkoutSession[], exerciseId: string, currentId: string): WorkoutSet[] {
   const previous = sessions.filter((session) => session.id !== currentId && session.status === "completed" &&
