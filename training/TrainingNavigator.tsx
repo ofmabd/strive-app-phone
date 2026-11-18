@@ -8,6 +8,7 @@ import { StatusBar } from "expo-status-bar";
 import TrainScreen from "../TrainScreen";
 import { trainingStore } from "../appStores";
 import WorkoutHistoryScreen, { WorkoutDetailScreen } from "./WorkoutHistoryScreen";
+import WorkoutSummaryScreen from "./WorkoutSummaryScreen";
 import ManualWorkoutScreen from "./ManualWorkoutScreen";
 import ActiveWorkoutScreen from "./ActiveWorkoutScreen";
 import TrainingSetupScreen from "./TrainingSetupScreen";
@@ -66,6 +67,7 @@ export default function TrainingNavigator() {
       <Stack.Screen name="SuggestedWorkout" component={TrainingPlaceholder} options={{ title: "Suggested workout" }} />
       <Stack.Screen name="ManualWorkout" component={ManualWorkoutScreen} options={{ title: "Manual workout" }} />
       <Stack.Screen name="WorkoutHistory" component={WorkoutHistoryScreen} options={{ title: "Workout history" }} />
+      <Stack.Screen name="WorkoutSummary" component={WorkoutSummaryScreen} options={{ title: "Workout complete" }} />
       <Stack.Screen name="WorkoutDetail" component={WorkoutDetailScreen} options={{ title: "Workout details" }} />
       <Stack.Screen name="ResumeWorkout" component={ActiveWorkoutScreen} options={{ title: "Workout" }} />
     </Stack.Navigator>

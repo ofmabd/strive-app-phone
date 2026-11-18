@@ -73,7 +73,7 @@ export function removeExercise(session: WorkoutSession, movementId: string, now:
 }
 export function addSet(session: WorkoutSession, movementId: string, unit: WeightUnit, now: string): WorkoutSession {
   editable(session);
-  return { ...session, updatedAt: now, exercises: session.exercises.map((item) => item.id === movementId ? { ...item, sets: [...item.sets, newSet(unit, now)] } : item) };
+  return { ...session, updatedAt: now, exercises: session.exercises.map((item) => item.id === movementId ? { ...item, sets: [...item.sets, { ...newSet(item.sets.at(-1)?.draft.weightUnit ?? unit, now), type: "normal" as const, draft: { ...(item.sets.at(-1)?.draft ?? { reps: "", weight: "", weightUnit: unit }) } }] } : item) };
 }
 export function removeSet(session: WorkoutSession, movementId: string, setId: string, now: string): WorkoutSession {
   editable(session);

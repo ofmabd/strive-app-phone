@@ -4,7 +4,7 @@ import { useIsFocused } from "@react-navigation/native";
 import type { TimerPreferences, WorkoutSession } from "./types";
 import RestDurationSelector from "./RestDurationSelector";
 import { exerciseName } from "./catalog";
-import { changeTimerPreferences, exerciseRestSeconds, restDurationLabel, pauseRest, remainingRestMs, restClock, resumeRest, skipRest, startRest } from "./restTimer";
+import { adjustRest, changeTimerPreferences, exerciseRestSeconds, restDurationLabel, pauseRest, remainingRestMs, restClock, resumeRest, skipRest, startRest } from "./restTimer";
 import { colors, styles } from "./styles";
 import { manualStyles as ui } from "./manualStyles";
 
@@ -47,12 +47,17 @@ export default function RestTimer({ session, exerciseId, disabled, edit }: Props
     <View style={timerStyles.header}>
       <View style={{ flex: 1, gap: 2 }}>
         <Text style={ui.caption} numberOfLines={2}>{off ? "Rest off" : runningName ? exerciseName(runningName.exerciseId, runningName.name) : "Rest"}</Text>
-        {!off && <Text style={timerStyles.clock} accessibilityLabel={`${Math.ceil((hasRest ? remaining : nextDuration * 1000) / 1000)} seconds of rest`}>{restClock(hasRest ? remaining : nextDuration * 1000)}</Text>}
+
       </View>
       <Pressable accessibilityRole="button" accessibilityState={{ expanded: settings }} accessibilityLabel="Rest timer settings" style={ui.chip} onPress={() => { Keyboard.dismiss(); setSettings((value) => !value); }}>
         <Text style={styles.buttonText}>{session.timer.mode === "automatic" ? "Auto" : session.timer.mode === "manual" ? "Manual" : "Off"} · Settings</Text>
       </Pressable>
     </View>
+        {!off && <View style={{flexDirection:"row",flexWrap:"wrap",alignItems:"center",gap:6}}>
+          {hasRest && remaining>0 && <Pressable accessibilityRole="button" accessibilityLabel="Subtract 15 seconds from current rest" disabled={disabled} style={ui.chip} onPress={()=>act((current,instant)=>adjustRest(current,-15,instant))}><Text style={ui.caption}>−15s</Text></Pressable>}
+          <Text style={timerStyles.clock} accessibilityLabel={`${Math.ceil((hasRest ? remaining : nextDuration * 1000) / 1000)} seconds of rest`}>{restClock(hasRest ? remaining : nextDuration * 1000)}</Text>
+          {hasRest && remaining>0 && <Pressable accessibilityRole="button" accessibilityLabel="Add 15 seconds to current rest" disabled={disabled} style={ui.chip} onPress={()=>act((current,instant)=>adjustRest(current,15,instant))}><Text style={ui.caption}>+15s</Text></Pressable>}
+        </View>}
     {!off && <>
       <Text style={ui.caption} accessibilityLiveRegion="polite">{!hasRest ? "Ready" : remaining === 0 ? "Rest complete" : paused ? "Paused" : "Resting"}</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>

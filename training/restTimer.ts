@@ -84,3 +84,16 @@ export function restClock(milliseconds: number): string {
   const seconds = Math.ceil(Math.max(0, milliseconds) / 1000);
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 }
+
+export function adjustRest(session: WorkoutSession, deltaSeconds: -15 | 15, now: string): WorkoutSession {
+  editable(session);
+  const remaining = remainingRestMs(session, Date.parse(now));
+  if (!session.restTimer || session.timer.mode === "off" || remaining === 0) return session;
+  const nextMs = Math.max(0, remaining + deltaSeconds * 1000);
+  const durationSeconds = Math.max(session.restTimer.durationSeconds, Math.ceil(nextMs / 1000));
+  validateRestDuration(durationSeconds);
+  const restTimer = session.restTimer.status === "paused"
+    ? { ...session.restTimer, remainingMs: nextMs, durationSeconds }
+    : { ...session.restTimer, deadlineAt: new Date(Date.parse(now) + nextMs).toISOString(), durationSeconds };
+  return { ...session, updatedAt: now, restTimer };
+}

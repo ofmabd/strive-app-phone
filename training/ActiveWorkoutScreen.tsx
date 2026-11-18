@@ -13,6 +13,7 @@ import SetTypeControl from "./SetTypeControl";
 import RestDurationSelector from "./RestDurationSelector";
 import { changeExerciseRest, exerciseRestSeconds, restDurationLabel } from "./restTimer";
 import { addExercise, changeSetType, addSet, displayWeight, editSet, finishSummary, previousPerformance, removeExercise, removeSet, toggleSet } from "./manual";
+import { moveExercise } from "./workoutPolish";
 import RestTimer from "./RestTimer";
 import ExercisePicker from "./ExercisePicker";
 import { styles } from "./styles";
@@ -89,8 +90,7 @@ function SessionEditor({ initial, data, navigation }: { initial: WorkoutSession;
       const saved = draft.getSnapshot().session;
       await trainingStore.finishSession(saved.id, saved.updatedAt, new Date().toISOString());
       finishingRef.current = false; setFinishing(false);
-      // Pop this Train stack even if the user switched tabs during verification.
-      navigation.popTo("TrainHome");
+      navigation.replace("WorkoutSummary", { sessionId: saved.id });
     } catch (cause) {
       setFinishError(cause instanceof Error ? cause.message : "Completion could not be verified.");
     } finally { finishingRef.current = false; setFinishing(false); }
@@ -120,7 +120,7 @@ function SessionEditor({ initial, data, navigation }: { initial: WorkoutSession;
           {state.error && <Pressable accessibilityRole="button" disabled={finishing} style={styles.button} onPress={() => { void draft.flush().catch(() => {}); }}><Text style={styles.buttonText}>Retry saving edits</Text></Pressable>}
         </View>
         {state.session.exercises.length === 0 && <Text style={styles.body}>No exercises remain. Add an exercise to continue; this unfinished workout does not count toward consistency.</Text>}
-        {state.session.exercises.map((movement) => {
+        {state.session.exercises.map((movement, exerciseIndex) => {
           const open = expanded.has(movement.id);
           const name = exerciseName(movement.exerciseId, movement.name);
           const labels = setLabels(movement.sets);
@@ -132,6 +132,12 @@ function SessionEditor({ initial, data, navigation }: { initial: WorkoutSession;
               <Text style={ui.caption}>{movement.sets.filter((set) => set.completed).length} / {movement.sets.length} sets complete</Text>
             </Pressable>
             {open && <>
+              <View style={ui.chips}>
+                <Pressable accessibilityRole="button" accessibilityLabel={`Move ${name} up`} disabled={blocked || exerciseIndex === 0} style={[ui.chip, (blocked || exerciseIndex === 0) && styles.disabled]}
+                  onPress={() => edit(current => moveExercise(current,movement.id,-1,new Date().toISOString()))}><Text style={ui.caption}>Move up</Text></Pressable>
+                <Pressable accessibilityRole="button" accessibilityLabel={`Move ${name} down`} disabled={blocked || exerciseIndex === state.session.exercises.length-1} style={[ui.chip, (blocked || exerciseIndex === state.session.exercises.length-1) && styles.disabled]}
+                  onPress={() => edit(current => moveExercise(current,movement.id,1,new Date().toISOString()))}><Text style={ui.caption}>Move down</Text></Pressable>
+              </View>
               {previous.length > 0 && <Text style={ui.caption}>Previous: {previous.map((set) => `${displayWeight(set.weightKg, unit)} × ${set.reps}`).join("; ")}</Text>}
               <Pressable accessibilityRole="button" disabled={blocked} accessibilityState={{ expanded: restPicker === movement.id }} style={styles.link}
                 onPress={() => { setRestExerciseId(movement.id); setRestPicker((id) => id === movement.id ? null : movement.id); }}>
@@ -142,18 +148,21 @@ function SessionEditor({ initial, data, navigation }: { initial: WorkoutSession;
                   onChange={(seconds) => edit((current) => changeExerciseRest(current, movement.id, seconds, new Date().toISOString()))} />
                 <Text style={ui.caption}>Next rest only. The active countdown stays unchanged.</Text>
               </>}
+              <View style={ui.setRow} accessible accessibilityLabel="Columns: Set, Weight, Reps, Complete">
+                <Text style={{width:48}}>Set</Text><Text style={ui.field}>Weight</Text><Text style={ui.field}>Reps</Text><Text style={{width:48}}>Done</Text>
+              </View>
               {movement.sets.map((set, index) => <View key={set.id} style={ui.set}>
                 <View style={ui.setRow}>
                   <SetTypeControl set={set} label={labels[index]} disabled={blocked}
-                    onChange={(type) => edit((current) => changeSetType(current, movement.id, set.id, type, new Date().toISOString()))} />
+                    onChange={(type) => edit((current) => changeSetType(current, movement.id, set.id, type, new Date().toISOString()))} onRemove={() => Alert.alert("Remove set?", "This removes its saved values from this unfinished workout.", [
+                    { text: "Keep set", style: "cancel" }, { text: "Remove set", style: "destructive", onPress: () => edit((current) => removeSet(current, movement.id, set.id, new Date().toISOString())) },
+                  ])} />
                   <View style={ui.field}>
-                    <Text style={ui.caption}>{set.draft.weightUnit}</Text>
-                    <TextInput style={ui.input} value={set.draft.weight} keyboardType="decimal-pad" editable={!blocked} onFocus={() => setRestExerciseId(movement.id)}
+                    <TextInput style={ui.input} value={set.draft.weight} placeholder={set.draft.weightUnit} placeholderTextColor="#515C5F" keyboardType="decimal-pad" editable={!blocked} onFocus={() => setRestExerciseId(movement.id)}
                       accessibilityLabel={`${name}, set ${labels[index]}, row ${index + 1}, weight in ${set.draft.weightUnit}`}
                       onChangeText={(text) => edit((current) => editSet(current, movement.id, set.id, "weight", text, new Date().toISOString()))} />
                   </View>
                   <View style={ui.field}>
-                    <Text style={ui.caption}>Reps</Text>
                     <TextInput style={ui.input} value={set.draft.reps} keyboardType="number-pad" editable={!blocked} onFocus={() => setRestExerciseId(movement.id)}
                       accessibilityLabel={`${name}, set ${labels[index]}, row ${index + 1}, reps`}
                       onChangeText={(text) => edit((current) => editSet(current, movement.id, set.id, "reps", text, new Date().toISOString()))} />
@@ -163,12 +172,9 @@ function SessionEditor({ initial, data, navigation }: { initial: WorkoutSession;
                     style={[ui.check, set.completed && styles.selected, blocked && styles.disabled]}
                     onPress={() => { setRestExerciseId(movement.id); edit((current) => toggleSet(current, movement.id, set.id, new Date().toISOString())); }}><Text style={ui.checkText}>{set.completed ? "✓" : "○"}</Text></Pressable>
                 </View>
-                <Pressable accessibilityRole="button" disabled={blocked} style={styles.link} accessibilityLabel={`Remove ${name} set ${labels[index]}, row ${index + 1}`}
-                  onPress={() => Alert.alert("Remove set?", "This removes its saved values from this unfinished workout.", [
-                    { text: "Keep set", style: "cancel" }, { text: "Remove set", style: "destructive", onPress: () => edit((current) => removeSet(current, movement.id, set.id, new Date().toISOString())) },
-                  ])}><Text style={styles.linkText}>Remove set</Text></Pressable>
+
               </View>)}
-              <Pressable accessibilityRole="button" disabled={blocked} style={[styles.button, styles.outline]} accessibilityLabel={`Add set to ${name}`}
+              <Pressable accessibilityRole="button" disabled={blocked} style={ui.chip} accessibilityLabel={`Add set to ${name}`}
                 onPress={() => edit((current) => addSet(current, movement.id, unit, new Date().toISOString()))}><Text style={styles.buttonText}>Add set</Text></Pressable>
               <Pressable accessibilityRole="button" disabled={blocked} style={styles.link} accessibilityLabel={`Remove ${name}`}
                 onPress={() => Alert.alert("Remove exercise?", "This removes the exercise and its sets from this unfinished workout.", [

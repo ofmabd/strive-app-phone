@@ -130,6 +130,10 @@ export function validateTrainingData(value: unknown): TrainingData {
     record(snapshot); day(snapshot.weekStart); check(weekStart(snapshot.weekStart) === snapshot.weekStart);
     target(snapshot.target); instant(snapshot.capturedAt);
   }
+  if (value.exercisePreferences !== undefined) {
+    record(value.exercisePreferences);
+    for (const ids of [value.exercisePreferences.favoriteIds, value.exercisePreferences.recentIds]) { list(ids); ids.forEach(text); unique(ids); }
+  }
   const data = value as unknown as TrainingData;
   unique(data.exercises.map((item) => item.id)); unique(data.sessions.map((item) => item.id));
   unique(data.weeklyTargets.map((item) => item.weekStart));
@@ -179,9 +183,18 @@ export function createTrainingStore(storage: Storage) {
       data.weeklyTargets.push({ weekStart: monday, target: data.profile.weeklyTarget, capturedAt });
     }
   }
+  function recent(data: TrainingData, ids: string[]) {
+    const old = data.exercisePreferences ?? { favoriteIds: [], recentIds: [] };
+    data.exercisePreferences = { ...old, recentIds: [...new Set([...ids, ...old.recentIds])].slice(0, 20) };
+  }
   function copy<T>(value: T): T { return JSON.parse(JSON.stringify(value)) as T; }
   return {
     load: () => serialize(async () => (await read()).data),
+    setExerciseFavorite: (id: string, favorite: boolean) => update((data) => {
+      text(id);
+      const old = data.exercisePreferences ?? { favoriteIds: [], recentIds: [] };
+      data.exercisePreferences = { ...old, favoriteIds: favorite ? [...new Set([...old.favoriteIds, id])] : old.favoriteIds.filter((item) => item !== id) };
+    }),
     saveProfile: async (value: TrainingProfile, today: string) => {
       profile(value);
       const input = copy(value);
@@ -218,6 +231,7 @@ export function createTrainingStore(storage: Storage) {
         check(input.exercises.length > 0 && input.exercises.every((item) => knownIds.has(item.exerciseId)));
         snapshot(data, input.startedOn, input.createdAt);
         data.sessions.push(input);
+        recent(data, input.exercises.map((item) => item.exerciseId));
         return input;
       });
     },
@@ -250,6 +264,8 @@ export function createTrainingStore(storage: Storage) {
         }
         snapshot(data, input.startedOn, input.createdAt);
         if (input.status === "completed") snapshot(data, input.completedOn, input.completedAt);
+        const added = input.exercises.filter((item) => !previous?.exercises.some((old) => old.id === item.id)).map((item) => item.exerciseId);
+        if (added.length) recent(data, added);
         if (index < 0) data.sessions.push(input); else data.sessions[index] = input;
       });
     },

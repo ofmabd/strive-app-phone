@@ -9,13 +9,13 @@ export function SetBadge({ set, label }: { set: WorkoutSet; label: string }) {
     <Text style={[styles.buttonText, { color: kind.color }]}>{label}</Text>
   </View>;
 }
-export default function SetTypeControl({ set, label, disabled, onChange }: {
-  set: WorkoutSet; label: string; disabled: boolean; onChange: (type: SetType) => void;
+export default function SetTypeControl({ set, label, disabled, onChange, onRemove }: {
+  set: WorkoutSet; label: string; disabled: boolean; onChange: (type: SetType) => void; onRemove?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const kind = SET_TYPES.find((item) => item.value === setType(set))!;
   return <>
-    <Pressable accessibilityRole="button" accessibilityLabel={`${kind.name} set ${label}. Change set type`} disabled={disabled} onPress={() => setOpen(true)}>
+    <Pressable accessibilityRole="button" accessibilityLabel={`${kind.name} set ${label}. Change set type or remove set`} disabled={disabled} onPress={() => setOpen(true)}>
       <SetBadge set={set} label={label} />
     </Pressable>
     <Modal transparent visible={open} animationType="fade" onRequestClose={() => setOpen(false)}>
@@ -25,6 +25,7 @@ export default function SetTypeControl({ set, label, disabled, onChange }: {
           style={[styles.option, { backgroundColor: item.background }]} onPress={() => { onChange(item.value); setOpen(false); }}>
           <Text style={[styles.buttonText, { color: item.color }]}>{item.mark ? `${item.mark} · ` : ""}{item.name}</Text>
         </Pressable>)}
+        {onRemove && <Pressable accessibilityRole="button" disabled={disabled} style={styles.link} onPress={()=>{setOpen(false);onRemove();}}><Text style={styles.linkText}>Remove set</Text></Pressable>}
         <Pressable accessibilityRole="button" style={styles.button} onPress={() => setOpen(false)}><Text style={styles.buttonText}>Cancel</Text></Pressable>
       </ScrollView></View>
     </Modal>

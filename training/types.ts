@@ -98,6 +98,7 @@ export type WeeklyTargetSnapshot = {
   capturedAt: string;
 };
 export type TrainingData = {
+  exercisePreferences?: { favoriteIds: string[]; recentIds: string[] };
   schemaVersion: 1;
   profile: TrainingProfile | null;
   exercises: Exercise[];
