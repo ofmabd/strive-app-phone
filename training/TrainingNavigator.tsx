@@ -7,6 +7,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import TrainScreen from "../TrainScreen";
 import { trainingStore } from "../appStores";
+import WorkoutHistoryScreen, { WorkoutDetailScreen } from "./WorkoutHistoryScreen";
 import ManualWorkoutScreen from "./ManualWorkoutScreen";
 import ActiveWorkoutScreen from "./ActiveWorkoutScreen";
 import TrainingSetupScreen from "./TrainingSetupScreen";
@@ -16,21 +17,17 @@ import { colors, styles } from "./styles";
 
 const Stack = createNativeStackNavigator<TrainStackParamList>();
 type PlaceholderProps = NativeStackScreenProps<TrainStackParamList,
-  "SuggestedWorkout" | "WorkoutHistory">;
+  "SuggestedWorkout">;
 function TrainingPlaceholder({ navigation, route }: PlaceholderProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [retry, setRetry] = useState(0);
   useEffect(() => {
     let active = true;
-    if (route.name !== "SuggestedWorkout") {
-      setLoading(false);
-      return;
-    }
     setLoading(true);
     void trainingStore.load().then((data) => {
       if (!active) return;
-      if (route.name === "SuggestedWorkout" && !hasCompletedSetup(data.profile)) {
+      if (!hasCompletedSetup(data.profile)) {
         navigation.replace("TrainingSetup", { continueToSuggested: true });
         return;
       }
@@ -41,7 +38,7 @@ function TrainingPlaceholder({ navigation, route }: PlaceholderProps) {
     }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [navigation, route.name, route.params, retry]);
-  const title = route.name === "SuggestedWorkout" ? "Suggested workout" : "Workout history";
+  const title = "Suggested workout";
   return (
     <SafeAreaView edges={["left", "right"]} style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content}>
@@ -51,9 +48,7 @@ function TrainingPlaceholder({ navigation, route }: PlaceholderProps) {
           <Text style={styles.error} accessibilityRole="alert">Training data could not be loaded. No workout was changed.</Text>
           <Pressable accessibilityRole="button" style={styles.button} onPress={() => setRetry((value) => value + 1)}><Text style={styles.buttonText}>Retry loading</Text></Pressable>
         </> : <>
-          <Text style={styles.body}>{route.name === "SuggestedWorkout"
-            ? "Setup is complete. Workout suggestions will be available in a later milestone. No workout has been generated."
-            : "The history view will be available in a later milestone. Existing structured sessions and legacy workout notes are unchanged."}</Text>
+          <Text style={styles.body}>Setup is complete. Workout suggestions are coming in a later milestone.</Text>
         </>}
         <Pressable accessibilityRole="button" style={[styles.button, styles.outline]} onPress={() => navigation.popTo("TrainHome")}><Text style={styles.buttonText}>Back to Train</Text></Pressable>
       </ScrollView>
@@ -70,7 +65,8 @@ export default function TrainingNavigator() {
       <Stack.Screen name="TrainingSetup" component={TrainingSetupScreen} options={{ title: "Training setup" }} />
       <Stack.Screen name="SuggestedWorkout" component={TrainingPlaceholder} options={{ title: "Suggested workout" }} />
       <Stack.Screen name="ManualWorkout" component={ManualWorkoutScreen} options={{ title: "Manual workout" }} />
-      <Stack.Screen name="WorkoutHistory" component={TrainingPlaceholder} options={{ title: "Workout history" }} />
+      <Stack.Screen name="WorkoutHistory" component={WorkoutHistoryScreen} options={{ title: "Workout history" }} />
+      <Stack.Screen name="WorkoutDetail" component={WorkoutDetailScreen} options={{ title: "Workout details" }} />
       <Stack.Screen name="ResumeWorkout" component={ActiveWorkoutScreen} options={{ title: "Workout" }} />
     </Stack.Navigator>
   </>;

@@ -11,6 +11,7 @@ export const DEFAULT_TIMER: Readonly<TimerPreferences> = { mode: "automatic", du
 export type RestTimerState = {
   durationSeconds: number;
   triggerSetId?: string;
+  exerciseId?: string; // Session exercise ID, not the catalog ID.
 } & (
   | { status: "running"; deadlineAt: string }
   | { status: "paused"; remainingMs: number }
@@ -45,13 +46,16 @@ export type Exercise = RecordMetadata & {
   name: string;
   source: "built_in" | "custom";
 };
+export type SetType = "normal" | "drop" | "failure" | "warmup";
 export type WorkoutSet = RecordMetadata & {
+  type?: SetType; // Older saved sets are Normal.
   completed: boolean;
   reps: number | null;
   weightKg: number | null; // null allows bodyweight/unentered weight; never stores pounds.
   draft: { reps: string; weight: string; weightUnit: WeightUnit };
 };
 export type SessionExercise = {
+  restSeconds?: number; // Missing means inherit the persisted workout default.
   id: string;
   exerciseId: string;
   name: string; // Snapshot preserves history after catalog edits.

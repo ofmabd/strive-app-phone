@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 import { trainingStore } from "../appStores";
-import { EXERCISE_EQUIPMENT, MUSCLES, exerciseLibrary, label } from "./catalog";
+import { EXERCISE_EQUIPMENT, MUSCLES, searchExercises, label } from "./catalog";
 import { customExercise } from "./manual";
 import type { Exercise, ExerciseEquipment, MuscleGroup } from "./types";
 import { styles } from "./styles";
@@ -19,7 +19,7 @@ export default function ExercisePicker({ saved, selected, toggle = false, disabl
   const [error, setError] = useState<string | null>(null);
   const inFlight = useRef(false);
   const pendingExercise = useRef<Exercise | null>(null);
-  const choices = exerciseLibrary(saved).filter((item) => item.name.toLowerCase().includes(query.toLowerCase()));
+  const choices = searchExercises(saved, query);
   async function createCustom() {
     if (!muscle || !equipment || !name.trim() || inFlight.current) return;
     inFlight.current = true; setSaving(true); setError(null);

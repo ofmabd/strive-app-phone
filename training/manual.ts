@@ -1,7 +1,7 @@
 import { localDate } from "./consistency";
 import { automaticRest, cancelSetRest, clearRestTimer } from "./restTimer";
 import { DEFAULT_TIMER } from "./types";
-import type { Exercise, ExerciseEquipment, MuscleGroup, ReadinessSnapshot, TrainingProfile, WeeklyTarget, WeightUnit, WorkoutSession, WorkoutSet } from "./types";
+import type { Exercise, ExerciseEquipment, MuscleGroup, ReadinessSnapshot, TrainingProfile, WeeklyTarget, WeightUnit, SetType, WorkoutSession, WorkoutSet } from "./types";
 let sequence = 0;
 export function newId(prefix: string): string {
   return `${prefix}:${Date.now().toString(36)}:${(++sequence).toString(36)}:${Math.random().toString(36).slice(2, 12)}`;
@@ -42,6 +42,9 @@ function changeSet(session: WorkoutSession, movementId: string, setId: string, n
 export function editSet(session: WorkoutSession, movementId: string, setId: string, field: "reps" | "weight", text: string, now: string): WorkoutSession {
   return cancelSetRest(changeSet(session, movementId, setId, now, (set) => ({ ...set, updatedAt: now, completed: false, reps: null, weightKg: null, draft: { ...set.draft, [field]: text } })), setId);
 }
+export function changeSetType(session: WorkoutSession, movementId: string, setId: string, type: SetType, now: string): WorkoutSession {
+  return changeSet(session, movementId, setId, now, (set) => ({ ...set, type, updatedAt: now }));
+}
 export function toggleSet(session: WorkoutSession, movementId: string, setId: string, now: string): WorkoutSession {
   const next = changeSet(session, movementId, setId, now, (set) => {
     if (set.completed) return { ...set, completed: false, updatedAt: now };
@@ -66,7 +69,7 @@ export function removeExercise(session: WorkoutSession, movementId: string, now:
   editable(session);
   const removed = session.exercises.find((item) => item.id === movementId);
   const next = { ...session, updatedAt: now, exercises: session.exercises.filter((item) => item.id !== movementId) };
-  return removed?.sets.some((set) => set.id === session.restTimer?.triggerSetId) ? clearRestTimer(next) : next;
+  return session.restTimer?.exerciseId === movementId || removed?.sets.some((set) => set.id === session.restTimer?.triggerSetId) ? clearRestTimer(next) : next;
 }
 export function addSet(session: WorkoutSession, movementId: string, unit: WeightUnit, now: string): WorkoutSession {
   editable(session);

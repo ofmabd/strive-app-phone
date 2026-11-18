@@ -1,7 +1,7 @@
 import type { Exercise, ExerciseEquipment, MuscleGroup } from "./types";
 export const MUSCLES: MuscleGroup[] = ["chest", "back", "shoulders", "quadriceps", "hamstrings", "glutes", "arms", "calves", "core", "full_body"];
 export const EXERCISE_EQUIPMENT: ExerciseEquipment[] = ["barbell", "dumbbell", "machine", "cable", "bodyweight", "resistance_band", "kettlebell"];
-export function label(value: string) { return value.replace(/_/g, " "); }
+export function label(value: string) { return value.replace(/_/g, " ").replace(/\b[a-z]/g, (letter) => letter.toUpperCase()); }
 const definitions: [string, string, MuscleGroup, ExerciseEquipment][] = [
   ["barbell-squat", "Barbell squat", "quadriceps", "barbell"],
   ["goblet-squat", "Goblet squat", "quadriceps", "dumbbell"],
@@ -24,10 +24,18 @@ const definitions: [string, string, MuscleGroup, ExerciseEquipment][] = [
 ];
 const publishedAt = "2026-11-10T00:00:00.000Z";
 export const BUILT_IN_EXERCISES: Exercise[] = definitions.map(([id, name, primaryMuscle, equipment]) => ({
-  id: `builtin:${id}`, schemaVersion: 1, name, primaryMuscle, equipment, source: "built_in",
+  id: `builtin:${id}`, schemaVersion: 1, name: label(name), primaryMuscle, equipment, source: "built_in",
   createdAt: publishedAt, updatedAt: publishedAt,
 }));
 export function exerciseLibrary(saved: readonly Exercise[]): Exercise[] {
   const ids = new Set(BUILT_IN_EXERCISES.map((item) => item.id));
   return [...BUILT_IN_EXERCISES, ...saved.filter((item) => !ids.has(item.id))];
+}
+
+export function exerciseName(id: string, savedName: string): string {
+  return BUILT_IN_EXERCISES.find((item) => item.id === id)?.name ?? savedName.trim();
+}
+export function searchExercises(saved: readonly Exercise[], query: string): Exercise[] {
+  const search = query.trim().toLowerCase();
+  return exerciseLibrary(saved).filter((item) => item.name.toLowerCase().includes(search));
 }

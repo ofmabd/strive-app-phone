@@ -4,5 +4,6 @@ export type TrainStackParamList = {
   SuggestedWorkout: undefined;
   ManualWorkout: undefined;
   WorkoutHistory: undefined;
+  WorkoutDetail: { sessionId: string };
   ResumeWorkout: { sessionId: string };
 };

@@ -18,14 +18,30 @@ export function remainingRestMs(session: WorkoutSession, nowMs: number): number 
   if (!timer) return 0;
   return timer.status === "paused" ? timer.remainingMs : Math.min(timer.durationSeconds * 1000, Math.max(0, Date.parse(timer.deadlineAt) - nowMs));
 }
-export function startRest(session: WorkoutSession, now: string, triggerSetId?: string): WorkoutSession {
+export const REST_DURATIONS = Array.from({ length: 19 }, (_, index) => 30 + index * 15);
+export function restDurationLabel(seconds: number): string {
+  const minutes = Math.floor(seconds / 60); const remainder = seconds % 60;
+  return [minutes ? `${minutes}m` : "", remainder ? `${remainder}s` : ""].filter(Boolean).join(" ") || "0s";
+}
+export function exerciseRestSeconds(session: WorkoutSession, exerciseId?: string): number {
+  return session.exercises.find((item) => item.id === exerciseId)?.restSeconds ?? session.timer.durationSeconds;
+}
+export function changeExerciseRest(session: WorkoutSession, exerciseId: string, seconds: number, now: string): WorkoutSession {
+  editable(session); validateRestDuration(seconds);
+  if (!session.exercises.some((item) => item.id === exerciseId)) throw new Error("Exercise not found.");
+  return { ...session, updatedAt: now, exercises: session.exercises.map((item) => item.id === exerciseId ? { ...item, restSeconds: seconds } : item) };
+}
+export function startRest(session: WorkoutSession, now: string, triggerSetId?: string, exerciseId?: string): WorkoutSession {
   editable(session);
   if (session.timer.mode === "off") return session;
-  validateRestDuration(session.timer.durationSeconds);
-  const deadlineMs = Date.parse(now) + session.timer.durationSeconds * 1000;
+  const movement = triggerSetId ? session.exercises.find((item) => item.sets.some((set) => set.id === triggerSetId))
+    : session.exercises.find((item) => item.id === exerciseId);
+  const durationSeconds = exerciseRestSeconds(session, movement?.id);
+  validateRestDuration(durationSeconds);
+  const deadlineMs = Date.parse(now) + durationSeconds * 1000;
   if (!Number.isFinite(new Date(deadlineMs).getTime())) throw new Error("Rest duration exceeds the supported date range.");
   return { ...session, updatedAt: now, restTimer: {
-    status: "running", durationSeconds: session.timer.durationSeconds,
+    status: "running", durationSeconds, ...(movement ? { exerciseId: movement.id } : {}),
     deadlineAt: new Date(deadlineMs).toISOString(), ...(triggerSetId ? { triggerSetId } : {}),
   } };
 }
@@ -44,15 +60,15 @@ export function pauseRest(session: WorkoutSession, now: string): WorkoutSession 
   if (session.timer.mode === "off" || session.restTimer?.status !== "running") return session;
   const remainingMs = remainingRestMs(session, Date.parse(now));
   if (remainingMs === 0) return session;
-  const { durationSeconds, triggerSetId } = session.restTimer;
-  return { ...session, updatedAt: now, restTimer: { status: "paused", durationSeconds, remainingMs, ...(triggerSetId ? { triggerSetId } : {}) } };
+  const { durationSeconds, triggerSetId, exerciseId } = session.restTimer;
+  return { ...session, updatedAt: now, restTimer: { status: "paused", durationSeconds, remainingMs, ...(triggerSetId ? { triggerSetId } : {}), ...(exerciseId ? { exerciseId } : {}) } };
 }
 export function resumeRest(session: WorkoutSession, now: string): WorkoutSession {
   editable(session);
   if (session.timer.mode === "off" || session.restTimer?.status !== "paused") return session;
-  const { remainingMs, durationSeconds, triggerSetId } = session.restTimer;
+  const { remainingMs, durationSeconds, triggerSetId, exerciseId } = session.restTimer;
   return { ...session, updatedAt: now, restTimer: { status: "running", durationSeconds,
-    deadlineAt: new Date(Date.parse(now) + remainingMs).toISOString(), ...(triggerSetId ? { triggerSetId } : {}) } };
+    deadlineAt: new Date(Date.parse(now) + remainingMs).toISOString(), ...(triggerSetId ? { triggerSetId } : {}), ...(exerciseId ? { exerciseId } : {}) } };
 }
 export function skipRest(session: WorkoutSession, now: string): WorkoutSession {
   editable(session);

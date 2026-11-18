@@ -60,9 +60,13 @@ function session(value: unknown) {
   const exerciseIds: string[] = [];
   const setIds: string[] = [];
   for (const entry of value.exercises) {
-    record(entry); text(entry.id); exerciseIds.push(entry.id); text(entry.exerciseId); text(entry.name); list(entry.sets);
+    record(entry);
+    if (entry.restSeconds !== undefined) { integer(entry.restSeconds); check(Number.isSafeInteger((entry.restSeconds as number) * 1000)); }
+    text(entry.id); exerciseIds.push(entry.id); text(entry.exerciseId); text(entry.name); list(entry.sets);
     for (const set of entry.sets) {
-      metadata(set); setIds.push(set.id); check(typeof set.completed === "boolean");
+      metadata(set);
+      if (set.type !== undefined) check(["normal", "drop", "failure", "warmup"].includes(String(set.type)));
+      setIds.push(set.id); check(typeof set.completed === "boolean");
       if (set.reps !== null) integer(set.reps);
       weight(set.weightKg);
       if (set.completed) integer(set.reps);
@@ -76,6 +80,7 @@ function session(value: unknown) {
     record(value.restTimer);
     integer(value.restTimer.durationSeconds);
     check(Number.isSafeInteger((value.restTimer.durationSeconds as number) * 1000));
+    if (value.restTimer.exerciseId !== undefined) { text(value.restTimer.exerciseId); check(exerciseIds.includes(value.restTimer.exerciseId)); }
     if (value.restTimer.triggerSetId !== undefined) {
       text(value.restTimer.triggerSetId); check(setIds.includes(value.restTimer.triggerSetId));
     }

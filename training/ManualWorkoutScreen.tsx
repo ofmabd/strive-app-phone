@@ -64,11 +64,11 @@ export default function ManualWorkoutScreen({ navigation }: Props) {
           <Text style={styles.body}>An unfinished workout is already saved. Resume it before starting another.</Text>
           <Pressable accessibilityRole="button" style={styles.button} onPress={() => navigation.replace("ResumeWorkout", { sessionId: unfinished.id })}><Text style={styles.buttonText}>Resume {unfinished.name}</Text></Pressable>
         </View> : data && <>
-          <Text style={styles.body}>Select exercises, then start logging. No training setup is required. Your session is saved when you start.</Text>
+          <Text style={styles.body}>Choose exercises for this workout.</Text>
           <TextInput style={ui.input} accessibilityLabel="Workout name" placeholder="Manual workout" placeholderTextColor="#515C5F" value={name} onChangeText={setName} editable={!starting} maxLength={120} />
           {!data.profile && <View style={styles.section}>
             <Text style={styles.heading}>Choose your weekly target</Text>
-            <Text style={styles.body}>Used for weekly consistency only. This does not complete training setup.</Text>
+            <Text style={styles.body}>For weekly consistency. Full setup is optional.</Text>
             <View style={ui.chips} accessibilityRole="radiogroup" accessibilityLabel="Weekly workout target">
               {FREQUENCIES.map((value) => <Pressable key={value} accessibilityRole="radio" accessibilityLabel={`${value} workouts per week`} accessibilityState={{ checked: target === value }} disabled={starting}
                 style={[ui.chip, target === value && styles.selected]} onPress={() => setTarget(value)}><Text style={styles.buttonText}>{value}</Text></Pressable>)}
