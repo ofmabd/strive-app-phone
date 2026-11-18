@@ -42,25 +42,21 @@ export default function RestTimer({ session, exerciseId, disabled, edit }: Props
     ?? session.exercises.find((item) => item.sets.some((set) => set.id === session.restTimer?.triggerSetId));
   const nextDuration = exerciseRestSeconds(session, selected?.id);
   const runningName = hasRest ? activeExercise : selected;
-  const chip = (text: string, action: (current: WorkoutSession, instant: string) => WorkoutSession) => <Pressable accessibilityRole="button" disabled={disabled} style={ui.chip} onPress={() => act(action)}><Text style={styles.buttonText}>{text}</Text></Pressable>;
+  const chip = (text: string, action: (current: WorkoutSession, instant: string) => WorkoutSession) => <Pressable accessibilityRole="button" disabled={disabled} style={timerStyles.action} onPress={() => act(action)}><Text style={timerStyles.actionText}>{text}</Text></Pressable>;
   return <View style={timerStyles.panel}>
-    <View style={timerStyles.header}>
-      <View style={{ flex: 1, gap: 2 }}>
-        <Text style={ui.caption} numberOfLines={2}>{off ? "Rest off" : runningName ? exerciseName(runningName.exerciseId, runningName.name) : "Rest"}</Text>
-
-      </View>
-      <Pressable accessibilityRole="button" accessibilityState={{ expanded: settings }} accessibilityLabel="Rest timer settings" style={ui.chip} onPress={() => { Keyboard.dismiss(); setSettings((value) => !value); }}>
-        <Text style={styles.buttonText}>{session.timer.mode === "automatic" ? "Auto" : session.timer.mode === "manual" ? "Manual" : "Off"} · Settings</Text>
+    <View style={timerStyles.bar}>
+      {!off ? <View style={timerStyles.countdown}>
+        {hasRest && remaining > 0 && <Pressable accessibilityRole="button" accessibilityLabel="Subtract 15 seconds from current rest" disabled={disabled} style={timerStyles.action} onPress={() => act((current, instant) => adjustRest(current, -15, instant))}><Text style={timerStyles.actionText}>−15s</Text></Pressable>}
+        <Text style={timerStyles.clock} accessibilityLabel={`${Math.ceil((hasRest ? remaining : nextDuration * 1000) / 1000)} seconds of rest`}>{restClock(hasRest ? remaining : nextDuration * 1000)}</Text>
+        {hasRest && remaining > 0 && <Pressable accessibilityRole="button" accessibilityLabel="Add 15 seconds to current rest" disabled={disabled} style={timerStyles.action} onPress={() => act((current, instant) => adjustRest(current, 15, instant))}><Text style={timerStyles.actionText}>+15s</Text></Pressable>}
+      </View> : <Text style={ui.caption}>Rest off</Text>}
+      <Pressable accessibilityRole="button" accessibilityState={{ expanded: settings }} accessibilityLabel={`Rest timer settings. Mode: ${session.timer.mode}`} style={timerStyles.action} onPress={() => { Keyboard.dismiss(); setSettings((value) => !value); }}>
+        <Text style={timerStyles.actionText}>{session.timer.mode === "automatic" ? "Auto" : session.timer.mode === "manual" ? "Manual" : "Off"} ⌄</Text>
       </Pressable>
     </View>
-        {!off && <View style={{flexDirection:"row",flexWrap:"wrap",alignItems:"center",gap:6}}>
-          {hasRest && remaining>0 && <Pressable accessibilityRole="button" accessibilityLabel="Subtract 15 seconds from current rest" disabled={disabled} style={ui.chip} onPress={()=>act((current,instant)=>adjustRest(current,-15,instant))}><Text style={ui.caption}>−15s</Text></Pressable>}
-          <Text style={timerStyles.clock} accessibilityLabel={`${Math.ceil((hasRest ? remaining : nextDuration * 1000) / 1000)} seconds of rest`}>{restClock(hasRest ? remaining : nextDuration * 1000)}</Text>
-          {hasRest && remaining>0 && <Pressable accessibilityRole="button" accessibilityLabel="Add 15 seconds to current rest" disabled={disabled} style={ui.chip} onPress={()=>act((current,instant)=>adjustRest(current,15,instant))}><Text style={ui.caption}>+15s</Text></Pressable>}
-        </View>}
-    {!off && <>
-      <Text style={ui.caption} accessibilityLiveRegion="polite">{!hasRest ? "Ready" : remaining === 0 ? "Rest complete" : paused ? "Paused" : "Resting"}</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+    {!off && <View style={timerStyles.bar}>
+      <Text style={timerStyles.context} numberOfLines={1} accessibilityLiveRegion="polite">{!hasRest ? "Ready" : remaining === 0 ? "Rest complete" : paused ? "Paused" : "Resting"}{runningName ? ` · ${exerciseName(runningName.exerciseId, runningName.name)}` : ""}</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, maxWidth: 210 }} contentContainerStyle={{ gap: 2 }}>
         {(!hasRest || remaining === 0) && chip("Start rest", (current, instant) => startRest(current, instant, undefined, selected?.id))}
         {hasRest && remaining > 0 && <>
           {chip(paused ? "Resume" : "Pause", paused ? resumeRest : pauseRest)}
@@ -68,7 +64,7 @@ export default function RestTimer({ session, exerciseId, disabled, edit }: Props
           {chip("Restart", (current, instant) => startRest(current, instant, undefined, activeExercise?.id ?? selected?.id))}
         </>}
       </ScrollView>
-    </>}
+    </View>}
     {settings && <ScrollView style={{ maxHeight: 160 }} contentContainerStyle={{ gap: 10 }} nestedScrollEnabled>
       <View style={ui.chips} accessibilityRole="radiogroup" accessibilityLabel="Rest timer mode">
         {modes.map((mode) => <Pressable key={mode} disabled={disabled} accessibilityRole="radio" accessibilityState={{ checked: session.timer.mode === mode, disabled }}
@@ -79,12 +75,16 @@ export default function RestTimer({ session, exerciseId, disabled, edit }: Props
       <Text style={ui.caption}>Workout default · {restDurationLabel(session.timer.durationSeconds)}</Text>
       <RestDurationSelector name="Workout default" value={session.timer.durationSeconds} disabled={disabled}
         onChange={(durationSeconds) => act((current, instant) => changeTimerPreferences(current, { ...current.timer, durationSeconds }, instant))} />
-      <Text style={ui.caption}>Each exercise can override this default. Duration edits apply to the next rest; changing mode ends the current rest.</Text>
+      <Text style={ui.caption}>Next rest only. Mode changes end the current rest.</Text>
     </ScrollView>}
   </View>;
 }
 const timerStyles = StyleSheet.create({
-  panel: { backgroundColor: "#E7E9DF", paddingHorizontal: 20, paddingVertical: 10, gap: 4, borderTopWidth: 1, borderTopColor: colors.line, width: "100%", maxWidth: 560, alignSelf: "center" },
-  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
-  clock: { color: colors.ink, fontSize: 24, fontWeight: "600", fontVariant: ["tabular-nums"] },
+  panel: { backgroundColor: "#E7E9DF", paddingHorizontal: 16, paddingVertical: 6, gap: 0, borderTopWidth: 1, borderTopColor: colors.line, width: "100%", maxWidth: 560, alignSelf: "center" },
+  bar: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 4 },
+  countdown: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 2 },
+  action: { minHeight: 44, minWidth: 44, paddingHorizontal: 8, justifyContent: "center", alignItems: "center" },
+  actionText: { color: colors.ink, fontSize: 13, fontWeight: "600" },
+  context: { color: colors.muted, fontSize: 12, flex: 1, minWidth: 40 },
+  clock: { color: colors.ink, fontSize: 22, minWidth: 64, textAlign: "center", fontWeight: "600", fontVariant: ["tabular-nums"] },
 });

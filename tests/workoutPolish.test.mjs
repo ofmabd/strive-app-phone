@@ -83,3 +83,16 @@ test("view collapse state is separate from session data and order edits do not d
   const s=complete(fixture().session);const before=JSON.stringify(s);const expanded=new Set(s.exercises.map(e=>e.id));expanded.delete(s.exercises[0].id);expanded.add(s.exercises[0].id);assert.equal(JSON.stringify(s),before);
   assert.equal(polish.moveExercise(s,s.exercises[0].id,-1,now),s);
 });
+
+test("immediate set removal autosaves while preserving other sets and clearing its rest trigger",async()=>{
+  const x=await prepared();let s=complete(x.session);const exercise=s.exercises[0];
+  s=m.addSet(s,exercise.id,"kg",now);await x.store.saveSession(s);
+  const controller=load("autosave").createSessionAutosave(s,value=>x.store.saveSession(value));
+  controller.edit(current=>m.removeSet(current,exercise.id,exercise.sets[0].id,later));
+  await controller.flush();
+  const restored=(await createTrainingStore(x.storage).load()).sessions[0];
+  assert.equal(restored.exercises[0].sets.length,1);
+  assert.equal(restored.exercises[0].sets[0].id,s.exercises[0].sets[1].id);
+  assert.equal(restored.restTimer,undefined);
+  assert.deepEqual(restored.exercises[1],s.exercises[1]);
+});

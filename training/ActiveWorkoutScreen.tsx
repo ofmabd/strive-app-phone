@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { usePreventRemove } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -14,6 +14,7 @@ import RestDurationSelector from "./RestDurationSelector";
 import { changeExerciseRest, exerciseRestSeconds, restDurationLabel } from "./restTimer";
 import { addExercise, changeSetType, addSet, displayWeight, editSet, finishSummary, previousPerformance, removeExercise, removeSet, toggleSet } from "./manual";
 import { moveExercise } from "./workoutPolish";
+import ExerciseActions from "./ExerciseActions";
 import RestTimer from "./RestTimer";
 import ExercisePicker from "./ExercisePicker";
 import { styles } from "./styles";
@@ -111,9 +112,9 @@ function SessionEditor({ initial, data, navigation }: { initial: WorkoutSession;
   const summary = finishSummary(state.session);
   return <SafeAreaView edges={["left", "right"]} style={styles.screen}>
     <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={insets.top + 44}>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <View style={styles.section}>
-          <Text style={styles.title} accessibilityRole="header">{state.session.name}</Text>
+      <ScrollView contentContainerStyle={[styles.content, activeStyles.content]} keyboardShouldPersistTaps="handled">
+        <View style={activeStyles.section}>
+          <Text style={[styles.title, activeStyles.title]} accessibilityRole="header">{state.session.name}</Text>
           <Text style={state.error ? styles.error : ui.saved} accessibilityLiveRegion="polite">
             {state.error ? `Not saved: ${state.error} Latest edits are kept on this screen. Keep the app open and retry.` : state.dirty || state.saving ? "Saving edits…" : "Saved"}
           </Text>
@@ -125,61 +126,55 @@ function SessionEditor({ initial, data, navigation }: { initial: WorkoutSession;
           const name = exerciseName(movement.exerciseId, movement.name);
           const labels = setLabels(movement.sets);
           const previous = previousPerformance(data.sessions, movement.exerciseId, state.session.id);
-          return <View key={movement.id} style={ui.exercise}>
+          return <View key={movement.id} style={[ui.exercise, activeStyles.exercise]}>
+            <View style={activeStyles.cardHeader}>
             <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }} accessibilityLabel={`${name}, ${open ? "collapse" : "expand"}`}
-              style={ui.exerciseHeader} onPress={() => { setRestExerciseId(movement.id); setExpanded((items) => { const next = new Set(items); if (open) next.delete(movement.id); else next.add(movement.id); return next; }); }}>
-              <Text style={styles.heading}>{name} {open ? "−" : "+"}</Text>
-              <Text style={ui.caption}>{movement.sets.filter((set) => set.completed).length} / {movement.sets.length} sets complete</Text>
+              style={[ui.exerciseHeader, activeStyles.exerciseHeader]} onPress={() => { setRestExerciseId(movement.id); setExpanded((items) => { const next = new Set(items); if (open) next.delete(movement.id); else next.add(movement.id); return next; }); }}>
+              <Text style={[styles.heading, activeStyles.exerciseName]}>{name} {open ? "−" : "+"}</Text>
+              <Text style={activeStyles.caption}>{movement.sets.filter((set) => set.completed).length} / {movement.sets.length} sets complete</Text>
             </Pressable>
+              <ExerciseActions name={name} disabled={blocked} first={exerciseIndex === 0} last={exerciseIndex === state.session.exercises.length-1}
+                move={(direction) => edit(current => moveExercise(current,movement.id,direction,new Date().toISOString()))}
+                remove={() => edit(current => removeExercise(current,movement.id,new Date().toISOString()))} />
+            </View>
             {open && <>
-              <View style={ui.chips}>
-                <Pressable accessibilityRole="button" accessibilityLabel={`Move ${name} up`} disabled={blocked || exerciseIndex === 0} style={[ui.chip, (blocked || exerciseIndex === 0) && styles.disabled]}
-                  onPress={() => edit(current => moveExercise(current,movement.id,-1,new Date().toISOString()))}><Text style={ui.caption}>Move up</Text></Pressable>
-                <Pressable accessibilityRole="button" accessibilityLabel={`Move ${name} down`} disabled={blocked || exerciseIndex === state.session.exercises.length-1} style={[ui.chip, (blocked || exerciseIndex === state.session.exercises.length-1) && styles.disabled]}
-                  onPress={() => edit(current => moveExercise(current,movement.id,1,new Date().toISOString()))}><Text style={ui.caption}>Move down</Text></Pressable>
-              </View>
               {previous.length > 0 && <Text style={ui.caption}>Previous: {previous.map((set) => `${displayWeight(set.weightKg, unit)} × ${set.reps}`).join("; ")}</Text>}
-              <Pressable accessibilityRole="button" disabled={blocked} accessibilityState={{ expanded: restPicker === movement.id }} style={styles.link}
+              <Pressable accessibilityRole="button" disabled={blocked} accessibilityState={{ expanded: restPicker === movement.id }} style={activeStyles.inlineAction}
                 onPress={() => { setRestExerciseId(movement.id); setRestPicker((id) => id === movement.id ? null : movement.id); }}>
-                <Text style={styles.linkText}>Rest · {restDurationLabel(exerciseRestSeconds(state.session, movement.id))}</Text>
+                <Text style={activeStyles.actionText}>Rest · {restDurationLabel(exerciseRestSeconds(state.session, movement.id))}</Text>
               </Pressable>
               {restPicker === movement.id && <>
                 <RestDurationSelector name={name} value={exerciseRestSeconds(state.session, movement.id)} disabled={blocked}
                   onChange={(seconds) => edit((current) => changeExerciseRest(current, movement.id, seconds, new Date().toISOString()))} />
-                <Text style={ui.caption}>Next rest only. The active countdown stays unchanged.</Text>
+                <Text style={ui.caption}>Applies to the next rest.</Text>
               </>}
-              <View style={ui.setRow} accessible accessibilityLabel="Columns: Set, Weight, Reps, Complete">
-                <Text style={{width:48}}>Set</Text><Text style={ui.field}>Weight</Text><Text style={ui.field}>Reps</Text><Text style={{width:48}}>Done</Text>
+              <View style={[ui.setRow, activeStyles.setRow]} accessible accessibilityLabel="Columns: Set, Weight, Reps, Complete">
+                <Text style={{width:44}}>Set</Text><Text style={ui.field}>Weight</Text><Text style={ui.field}>Reps</Text><Text style={{width:44}}>Done</Text>
               </View>
-              {movement.sets.map((set, index) => <View key={set.id} style={ui.set}>
-                <View style={ui.setRow}>
-                  <SetTypeControl set={set} label={labels[index]} disabled={blocked}
-                    onChange={(type) => edit((current) => changeSetType(current, movement.id, set.id, type, new Date().toISOString()))} onRemove={() => Alert.alert("Remove set?", "This removes its saved values from this unfinished workout.", [
-                    { text: "Keep set", style: "cancel" }, { text: "Remove set", style: "destructive", onPress: () => edit((current) => removeSet(current, movement.id, set.id, new Date().toISOString())) },
-                  ])} />
+              {movement.sets.map((set, index) => <View key={set.id} style={[ui.set, activeStyles.set]}>
+                <View style={[ui.setRow, activeStyles.setRow]}>
+                  <SetTypeControl compact set={set} label={labels[index]} disabled={blocked}
+                    onChange={(type) => edit((current) => changeSetType(current, movement.id, set.id, type, new Date().toISOString()))} onRemove={() => edit(current => removeSet(current,movement.id,set.id,new Date().toISOString()))} />
                   <View style={ui.field}>
-                    <TextInput style={ui.input} value={set.draft.weight} placeholder={set.draft.weightUnit} placeholderTextColor="#515C5F" keyboardType="decimal-pad" editable={!blocked} onFocus={() => setRestExerciseId(movement.id)}
+                    <TextInput style={[ui.input, activeStyles.input]} value={set.draft.weight} placeholder={set.draft.weightUnit} placeholderTextColor="#515C5F" keyboardType="decimal-pad" editable={!blocked} onFocus={() => setRestExerciseId(movement.id)}
                       accessibilityLabel={`${name}, set ${labels[index]}, row ${index + 1}, weight in ${set.draft.weightUnit}`}
                       onChangeText={(text) => edit((current) => editSet(current, movement.id, set.id, "weight", text, new Date().toISOString()))} />
                   </View>
                   <View style={ui.field}>
-                    <TextInput style={ui.input} value={set.draft.reps} keyboardType="number-pad" editable={!blocked} onFocus={() => setRestExerciseId(movement.id)}
+                    <TextInput style={[ui.input, activeStyles.input]} value={set.draft.reps} keyboardType="number-pad" editable={!blocked} onFocus={() => setRestExerciseId(movement.id)}
                       accessibilityLabel={`${name}, set ${labels[index]}, row ${index + 1}, reps`}
                       onChangeText={(text) => edit((current) => editSet(current, movement.id, set.id, "reps", text, new Date().toISOString()))} />
                   </View>
                   <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: set.completed, disabled: blocked }} disabled={blocked}
                     accessibilityLabel={`${set.completed ? "Undo" : "Complete"} ${name} set ${labels[index]}, row ${index + 1}`}
-                    style={[ui.check, set.completed && styles.selected, blocked && styles.disabled]}
+                    style={[ui.check, activeStyles.check, set.completed && styles.selected, blocked && styles.disabled]}
                     onPress={() => { setRestExerciseId(movement.id); edit((current) => toggleSet(current, movement.id, set.id, new Date().toISOString())); }}><Text style={ui.checkText}>{set.completed ? "✓" : "○"}</Text></Pressable>
                 </View>
 
               </View>)}
-              <Pressable accessibilityRole="button" disabled={blocked} style={ui.chip} accessibilityLabel={`Add set to ${name}`}
-                onPress={() => edit((current) => addSet(current, movement.id, unit, new Date().toISOString()))}><Text style={styles.buttonText}>Add set</Text></Pressable>
-              <Pressable accessibilityRole="button" disabled={blocked} style={styles.link} accessibilityLabel={`Remove ${name}`}
-                onPress={() => Alert.alert("Remove exercise?", "This removes the exercise and its sets from this unfinished workout.", [
-                  { text: "Keep exercise", style: "cancel" }, { text: "Remove exercise", style: "destructive", onPress: () => edit((current) => removeExercise(current, movement.id, new Date().toISOString())) },
-                ])}><Text style={styles.linkText}>Remove exercise</Text></Pressable>
+              <Pressable accessibilityRole="button" disabled={blocked} style={activeStyles.inlineAction} accessibilityLabel={`Add set to ${name}`}
+                onPress={() => edit((current) => addSet(current, movement.id, unit, new Date().toISOString()))}><Text style={activeStyles.actionText}>+ Add Set</Text></Pressable>
+
             </>}
           </View>;
         })}
@@ -193,10 +188,10 @@ function SessionEditor({ initial, data, navigation }: { initial: WorkoutSession;
             setExpanded((items) => new Set([...items, next.exercises[next.exercises.length - 1].id]));
             return next;
           })} />}
-        <View style={styles.divider}>
+        <View style={[styles.divider, activeStyles.finish]}>
           <Text style={styles.body}>{summary.completed} completed sets · {summary.unfinished} unfinished sets</Text>
           {finishError && <Text style={styles.error} accessibilityRole="alert">{finishError} Completion was not confirmed. {pendingFinish ? "Editing is paused while completion is uncertain. Retry finishing to check the saved result." : "Retry saving your edits before finishing."}</Text>}
-          <Pressable accessibilityRole="button" disabled={finishing || confirming} style={[styles.button, (finishing || confirming) && styles.disabled]}
+          <Pressable accessibilityRole="button" disabled={finishing || confirming} style={[styles.button, activeStyles.finishButton, (finishing || confirming) && styles.disabled]}
             onPress={() => pendingFinish ? void finish() : confirmFinish()}><Text style={styles.buttonText}>{finishing ? "Verifying completion…" : pendingFinish ? "Retry finish verification" : "Finish workout"}</Text></Pressable>
         </View>
       </ScrollView>
@@ -204,3 +199,17 @@ function SessionEditor({ initial, data, navigation }: { initial: WorkoutSession;
     </KeyboardAvoidingView>
   </SafeAreaView>;
 }
+
+const activeStyles = StyleSheet.create({
+  content: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 20, gap: 12 },
+  section: { gap: 4 }, title: { fontSize: 24, lineHeight: 30 },
+  exercise: { padding: 10, gap: 4 },
+  cardHeader: { flexDirection: "row", alignItems: "center", gap: 4 },
+  exerciseHeader: { flex: 1, minHeight: 44, gap: 0 },
+  exerciseName: { fontSize: 18, lineHeight: 24 },
+  caption: { color: "#515C5F", fontSize: 12, lineHeight: 18 },
+  inlineAction: { minHeight: 44, paddingHorizontal: 4, paddingVertical: 8, justifyContent: "center", alignSelf: "flex-start" },
+  actionText: { color: "#15191C", fontSize: 14, fontWeight: "600" },
+  set: { paddingTop: 2 }, setRow: { gap: 6 }, input: { paddingVertical: 6, minHeight: 44 },
+  check: { width: 44, minHeight: 44 }, finish: { paddingTop: 12, gap: 8 }, finishButton: { minHeight: 48, paddingVertical: 10 },
+});

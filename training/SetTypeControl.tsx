@@ -3,20 +3,20 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-nati
 import type { SetType, WorkoutSet } from "./types";
 import { SET_TYPES, setType } from "./setTypes";
 import { styles } from "./styles";
-export function SetBadge({ set, label }: { set: WorkoutSet; label: string }) {
+export function SetBadge({ set, label, compact = false }: { set: WorkoutSet; label: string; compact?: boolean }) {
   const kind = SET_TYPES.find((item) => item.value === setType(set))!;
-  return <View style={[badgeStyles.badge, { backgroundColor: kind.background }]}>
+  return <View style={[badgeStyles.badge, compact && { minWidth: 44, minHeight: 44 }, { backgroundColor: kind.background }]}>
     <Text style={[styles.buttonText, { color: kind.color }]}>{label}</Text>
   </View>;
 }
-export default function SetTypeControl({ set, label, disabled, onChange, onRemove }: {
-  set: WorkoutSet; label: string; disabled: boolean; onChange: (type: SetType) => void; onRemove?: () => void;
+export default function SetTypeControl({ set, label, disabled, onChange, onRemove, compact = false }: {
+  set: WorkoutSet; label: string; disabled: boolean; onChange: (type: SetType) => void; onRemove?: () => void; compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const kind = SET_TYPES.find((item) => item.value === setType(set))!;
   return <>
     <Pressable accessibilityRole="button" accessibilityLabel={`${kind.name} set ${label}. Change set type or remove set`} disabled={disabled} onPress={() => setOpen(true)}>
-      <SetBadge set={set} label={label} />
+      <SetBadge set={set} label={label} compact={compact} />
     </Pressable>
     <Modal transparent visible={open} animationType="fade" onRequestClose={() => setOpen(false)}>
       <View style={badgeStyles.overlay}><ScrollView style={badgeStyles.scroll} contentContainerStyle={badgeStyles.sheet} accessibilityViewIsModal>
