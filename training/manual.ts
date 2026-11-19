@@ -1,6 +1,7 @@
 import { localDate } from "./consistency";
 import { automaticRest, cancelSetRest, clearRestTimer } from "./restTimer";
 import { DEFAULT_TIMER } from "./types";
+import { fromKilograms, KG_PER_LB, weightNumber } from "./weightUnits";
 import type { Exercise, ExerciseEquipment, MuscleGroup, ReadinessSnapshot, TrainingProfile, WeeklyTarget, WeightUnit, SetType, WorkoutSession, WorkoutSet } from "./types";
 let sequence = 0;
 export function newId(prefix: string): string {
@@ -21,7 +22,7 @@ export function createManualSession(name: string, exercises: readonly Exercise[]
   if (!exercises.length) throw new Error("Choose at least one exercise.");
   if (new Set(exercises.map((item) => item.id)).size !== exercises.length) throw new Error("Exercise already selected.");
   return {
-    ...metadata(newId("session"), now), status: "active", source: "manual", name: name.trim() || "Manual workout",
+    ...metadata(newId("session"), now), status: "draft", source: "manual", name: name.trim() || "Manual workout",
     startedOn: localDate(new Date(now)), exercises: exercises.map((item) => ({ id: newId("movement"), exerciseId: item.id, name: item.name, sets: [newSet(profile.preferredWeightUnit, now)] })),
     readiness, timer: { ...profile.timer }, adjustments: [],
   };
@@ -37,10 +38,10 @@ function changeSet(session: WorkoutSession, movementId: string, setId: string, n
     found = true; return change(set);
   }) });
   if (!found) throw new Error("Set not found.");
-  return { ...session, exercises, updatedAt: now };
+  return { ...session, status: "active", exercises, updatedAt: now };
 }
-export function editSet(session: WorkoutSession, movementId: string, setId: string, field: "reps" | "weight", text: string, now: string): WorkoutSession {
-  return cancelSetRest(changeSet(session, movementId, setId, now, (set) => ({ ...set, updatedAt: now, completed: false, reps: null, weightKg: null, draft: { ...set.draft, [field]: text } })), setId);
+export function editSet(session: WorkoutSession, movementId: string, setId: string, field: "reps" | "weight", text: string, now: string, weightUnit?: WeightUnit): WorkoutSession {
+  return cancelSetRest(changeSet(session, movementId, setId, now, (set) => ({ ...set, updatedAt: now, completed: false, reps: null, weightKg: null, draft: { ...set.draft, [field]: text, ...(field === "weight" && weightUnit ? { weightUnit } : {}) } })), setId);
 }
 export function changeSetType(session: WorkoutSession, movementId: string, setId: string, type: SetType, now: string): WorkoutSession {
   return changeSet(session, movementId, setId, now, (set) => ({ ...set, type, updatedAt: now }));
@@ -53,7 +54,7 @@ export function toggleSet(session: WorkoutSession, movementId: string, setId: st
     if (!Number.isSafeInteger(reps) || reps < 1) throw new Error("Enter a whole number of reps greater than zero.");
     const weight = set.draft.weight.trim().replace(",", ".");
     if (weight !== "" && !/^\d+(\.\d+)?$/.test(weight)) throw new Error("Enter a complete non-negative weight, or leave it blank for unweighted sets.");
-    const weightKg = weight === "" ? null : Number(weight) * (set.draft.weightUnit === "lb" ? 0.45359237 : 1);
+    const weightKg = weight === "" ? null : Number(weight) * (set.draft.weightUnit === "lb" ? KG_PER_LB : 1);
     if (weightKg !== null && !Number.isFinite(weightKg)) throw new Error("Weight is too large.");
     return { ...set, completed: true, reps, weightKg, updatedAt: now };
   });
@@ -101,5 +102,5 @@ export function previousPerformance(sessions: readonly WorkoutSession[], exercis
   return previousExerciseSets(sessions, exerciseId, currentId).filter((set) => set.completed);
 }
 export function displayWeight(weightKg: number | null, unit: WeightUnit): string {
-  return weightKg === null ? "unweighted" : `${Number((weightKg / (unit === "lb" ? 0.45359237 : 1)).toFixed(2))} ${unit}`;
+  return weightKg === null ? "unweighted" : `${weightNumber(fromKilograms(weightKg, unit))} ${unit}`;
 }

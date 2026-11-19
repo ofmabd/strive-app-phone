@@ -8,6 +8,9 @@ import type { TrainStackParamList } from "./navigationTypes";
 import type { Exercise, ReadinessSnapshot, TrainingData, WeeklyTarget } from "./types";
 import { createManualSession, manualProfile } from "./manual";
 import { localDate } from "./consistency";
+import { unfinishedWorkout } from "./lifecycle";
+import { weightUnit } from "./weightUnits";
+import { dismissKeyboardOutsideInput } from "./keyboard";
 import { FREQUENCIES } from "./setup";
 import ExercisePicker from "./ExercisePicker";
 import { styles } from "./styles";
@@ -33,7 +36,7 @@ export default function ManualWorkoutScreen({ navigation }: Props) {
     }).catch(() => { if (active) setLoadError(true); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [retry]);
-  const unfinished = data?.sessions.find((item) => item.status === "active" || item.status === "draft");
+  const unfinished = data ? unfinishedWorkout(data.sessions) : null;
   async function start() {
     if (!data || !selected.length || (!data.profile && !target) || startingRef.current) return;
     startingRef.current = true; setStarting(true); setError(null);
@@ -43,7 +46,7 @@ export default function ManualWorkoutScreen({ navigation }: Props) {
       try { scores = await scoreStore.load(); } catch { /* Preserve an explicit missing snapshot. */ }
       const clock = new Date();
       const now = clock.toISOString();
-      const profile = data.profile ?? manualProfile(target!, now);
+      const profile = { ...(data.profile ?? manualProfile(target!, now)), preferredWeightUnit: weightUnit(data) };
       const saved = scores.find((item) => item.date === clock.toDateString());
       const readiness: ReadinessSnapshot = saved
         ? { status: "available", score: saved.score, localDate: localDate(clock) }
@@ -54,15 +57,15 @@ export default function ManualWorkoutScreen({ navigation }: Props) {
     finally { startingRef.current = false; setStarting(false); }
   }
   return <SafeAreaView edges={["left", "right"]} style={styles.screen}>
-    <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={insets.top + 44}>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+    <KeyboardAvoidingView style={styles.screen} onTouchStart={dismissKeyboardOutsideInput} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={insets.top + 44}>
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="always" keyboardDismissMode="on-drag">
         <Text style={styles.title} accessibilityRole="header">Build your workout</Text>
         {loading ? <ActivityIndicator accessibilityLabel="Loading manual workout" /> : loadError ? <View style={styles.section}>
           <Text style={styles.error} accessibilityRole="alert">Training data could not be loaded. Nothing has been reset.</Text>
           <Pressable accessibilityRole="button" style={styles.button} onPress={() => setRetry((value) => value + 1)}><Text style={styles.buttonText}>Retry loading</Text></Pressable>
         </View> : unfinished ? <View style={styles.section}>
-          <Text style={styles.body}>An unfinished workout is already saved. Resume it before starting another.</Text>
-          <Pressable accessibilityRole="button" style={styles.button} onPress={() => navigation.replace("ResumeWorkout", { sessionId: unfinished.id })}><Text style={styles.buttonText}>Resume {unfinished.name}</Text></Pressable>
+          <Text style={styles.body}>A saved workout is available. Open it to continue or discard it before starting another.</Text>
+          <Pressable accessibilityRole="button" style={styles.button} onPress={() => navigation.replace("ResumeWorkout", { sessionId: unfinished.session.id })}><Text style={styles.buttonText}>{unfinished.kind === "resume" ? "Resume" : "Review"} {unfinished.session.name}</Text></Pressable>
         </View> : data && <>
           <Text style={styles.body}>Choose exercises for this workout.</Text>
           <TextInput style={ui.input} accessibilityLabel="Workout name" placeholder="Manual workout" placeholderTextColor="#515C5F" value={name} onChangeText={setName} editable={!starting} maxLength={120} />

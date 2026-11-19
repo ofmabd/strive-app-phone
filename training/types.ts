@@ -98,6 +98,7 @@ export type WeeklyTargetSnapshot = {
   capturedAt: string;
 };
 export type TrainingData = {
+  preferences?: { weightUnit: WeightUnit }; // Optional; older profiles remain the fallback.
   exercisePreferences?: { favoriteIds: string[]; recentIds: string[] };
   schemaVersion: 1;
   profile: TrainingProfile | null;

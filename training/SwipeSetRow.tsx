@@ -9,7 +9,7 @@ export default function SwipeSetRow({ children, disabled, editing, label, onDele
 }) {
   const swipe = useRef<SwipeableMethods>(null);
   useEffect(() => { if (disabled || editing) swipe.current?.close(); }, [disabled, editing]);
-  return <ReanimatedSwipeable ref={swipe} enabled={!disabled && !editing} friction={2} rightThreshold={36}
+  return <ReanimatedSwipeable ref={swipe} enabled={!disabled} hitSlop={editing ? { left: 0, width: 44 } : undefined} friction={2} rightThreshold={36}
     onSwipeableOpenStartDrag={Keyboard.dismiss}
     dragOffsetFromRight={-24} dragOffsetFromLeft={24} overshootRight={false} overshootLeft={false}
     renderRightActions={() => <Pressable accessibilityRole="button" accessibilityLabel={`Delete ${label}`} disabled={disabled}

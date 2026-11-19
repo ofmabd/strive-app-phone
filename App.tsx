@@ -10,6 +10,8 @@ import * as Haptics from "expo-haptics";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import TrainingNavigator from "./training/TrainingNavigator";
+import ProfileScreen from "./training/ProfileScreen";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import type { CompositeScreenProps } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
@@ -434,25 +436,20 @@ function TabNavigator() {
         )}
       />
 
-      <Tab.Screen
-        name="Profile"
-        component={() => (
-          <View style={{ flex: 1, backgroundColor: "#0b0b0b", justifyContent: "center", alignItems: "center" }}>
-            <Text style={{ color: "white" }}>Profile</Text>
-          </View>
-        )}
-      />
+      <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
   );
 }
 
 export default function App() {
   return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="Checkin" component={CheckinScreen} />
         <Stack.Screen name="Main" component={TabNavigator} />
       </Stack.Navigator>
     </NavigationContainer>
+    </GestureHandlerRootView>
   );
 }

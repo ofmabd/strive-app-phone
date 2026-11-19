@@ -8,6 +8,7 @@ import type { TrainingData } from "./types";
 import type { TrainStackParamList } from "./navigationTypes";
 import { completedHistory, elapsedLabel, historyDate, historySummary } from "./history";
 import { exerciseName } from "./catalog";
+import { inputWeight, weightUnit } from "./weightUnits";
 import { displayWeight } from "./manual";
 import { setLabels, setType, SET_TYPES } from "./setTypes";
 import { SetBadge } from "./SetTypeControl";
@@ -58,6 +59,7 @@ export function WorkoutDetailScreen({ route }: NativeStackScreenProps<TrainStack
   const state = useHistory();
   const session = state.data ? completedHistory(state.data.sessions).find((item) => item.id === route.params.sessionId) : undefined;
   const summary = session ? historySummary(session) : null;
+  const unit = state.data ? weightUnit(state.data) : "kg";
   return <SafeAreaView edges={["left", "right"]} style={styles.screen}>
     <ScrollView contentContainerStyle={styles.content}>
       {state.loading || state.error ? <LoadState error={state.error && !state.loading} retry={state.retry} /> : !session ? <Text style={styles.body}>Completed workout not found. Return to history to refresh the list.</Text> : <>
@@ -71,14 +73,16 @@ export function WorkoutDetailScreen({ route }: NativeStackScreenProps<TrainStack
           return <View key={movement.id} style={ui.exercise}>
             <Text style={styles.heading} accessibilityRole="header">{exerciseName(movement.exerciseId, movement.name)}</Text>
             {movement.sets.length === 0 && <Text style={ui.caption}>No sets recorded.</Text>}
-            {movement.sets.map((set, index) => <View key={set.id} style={ui.setRow}>
+            {movement.sets.map((set, index) => {
+              const draft = inputWeight(set, unit);
+              return <View key={set.id} style={ui.setRow}>
               <SetBadge set={set} label={labels[index]} />
               <View style={ui.field}>
                 <Text style={styles.buttonText}>{SET_TYPES.find((kind) => kind.value === setType(set))!.name} · {set.completed ? "Completed" : "Unfinished"}</Text>
-                <Text style={ui.caption}>{set.completed ? `${displayWeight(set.weightKg, set.draft.weightUnit)} × ${set.reps} reps`
-                  : `${set.draft.weight.trim() ? `${set.draft.weight} ${set.draft.weightUnit}` : "Weight not entered"} · ${set.draft.reps.trim() ? `${set.draft.reps} reps (draft)` : "Reps not entered"}`}</Text>
+                <Text style={ui.caption}>{set.completed ? `${displayWeight(set.weightKg, unit)} × ${set.reps} reps`
+                  : `${draft.value.trim() ? `${draft.value} ${draft.unit}` : "Weight not entered"} · ${set.draft.reps.trim() ? `${set.draft.reps} reps (draft)` : "Reps not entered"}`}</Text>
               </View>
-            </View>)}
+            </View>; })}
           </View>;
         })}
       </>}

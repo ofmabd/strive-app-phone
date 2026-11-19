@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Keyboard, Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Keyboard, Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import DraggableFlatList, { ScaleDecorator } from "react-native-draggable-flatlist";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -14,6 +14,8 @@ export default function ReorderExercises({ exercises, onClose }: { exercises: Se
   const latest = useRef(order);
   const draggingRef = useRef(false);
   const insets = useSafeAreaInsets();
+  const window = useWindowDimensions();
+  const sheetHeight = Math.max(200, Math.min(window.height - insets.top - insets.bottom - 48, 140 + order.length * 76 * window.fontScale));
   function update(next: SessionExercise[]) { latest.current = next; setOrder(next); }
   function close() { if (!draggingRef.current) onClose(latest.current.map((item) => item.id)); }
   function move(index: number, direction: -1 | 1) {
@@ -26,15 +28,15 @@ export default function ReorderExercises({ exercises, onClose }: { exercises: Se
   return <Modal transparent visible animationType="fade" onShow={Keyboard.dismiss} onRequestClose={close}>
     <GestureHandlerRootView style={reorderStyles.root}>
       <Pressable style={StyleSheet.absoluteFill} accessibilityRole="button" accessibilityLabel="Save order and close" disabled={dragging} onPress={close} />
-      <View accessibilityViewIsModal style={[reorderStyles.sheet, { marginTop: insets.top + 16, marginBottom: insets.bottom + 16 }]}>
+      <View accessibilityViewIsModal onAccessibilityEscape={close} style={[reorderStyles.sheet, { height: sheetHeight, marginTop: insets.top + 16, marginBottom: insets.bottom + 16 }]}>
         <View style={reorderStyles.header}>
           <Text style={[styles.heading, { flex: 1 }]} accessibilityRole="header">Reorder exercises</Text>
           <Pressable accessibilityRole="button" disabled={dragging} onPress={close} style={reorderStyles.action}><Text style={styles.buttonText}>Done</Text></Pressable>
         </View>
         <Text style={reorderStyles.caption}>Hold a handle to drag. Order saves on close.</Text>
         <DraggableFlatList data={order} keyExtractor={(item) => item.id}
-          containerStyle={{ flexShrink: 1 }}
-          style={{ flexGrow: 0, flexShrink: 1 }} contentContainerStyle={{ paddingBottom: 8 }}
+          containerStyle={{ flex: 1 }}
+          style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 8 }}
           autoscrollThreshold={60} autoscrollSpeed={120} activationDistance={8}
           onDragBegin={() => { draggingRef.current = true; setDragging(true); }}
           onDragEnd={({ data }) => { update(data); draggingRef.current = false; setDragging(false); }}
@@ -44,7 +46,7 @@ export default function ReorderExercises({ exercises, onClose }: { exercises: Se
             return <ScaleDecorator activeScale={1.025}>
               <View style={[reorderStyles.row, isActive && reorderStyles.active]}>
                 <Pressable accessibilityRole="button" accessibilityLabel={`Drag ${name}`} accessibilityHint="Touch and hold to reorder. Move up and down buttons are also available."
-                  disabled={dragging} onLongPress={drag} delayLongPress={180} style={reorderStyles.action}>
+                  onLongPress={() => { if (!draggingRef.current) drag(); }} delayLongPress={180} style={reorderStyles.action}>
                   <WorkoutIcon name="grip" />
                 </Pressable>
                 <Text style={reorderStyles.name}>{name}</Text>

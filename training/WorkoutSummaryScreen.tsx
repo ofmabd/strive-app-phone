@@ -1,5 +1,8 @@
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
+import { fromKilograms, weightNumber, weightUnit } from "./weightUnits";
+import type { WeightUnit } from "./types";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { trainingStore } from "../appStores";
@@ -10,13 +13,14 @@ import { completedHistory, elapsedLabel } from "./history";
 import { styles } from "./styles";
 export default function WorkoutSummaryScreen({ navigation, route }: NativeStackScreenProps<TrainStackParamList,"WorkoutSummary">) {
   const [session,setSession]=useState<WorkoutSession | null>(null);
+  const [unit, setUnit] = useState<WeightUnit>("kg");
   const [loading,setLoading]=useState(true); const [error,setError]=useState(false); const [retry,setRetry]=useState(0);
-  useEffect(()=>{
+  useFocusEffect(useCallback(()=>{
     let active=true;setLoading(true);
-    void trainingStore.load().then(data=>{if(active){setSession(completedHistory(data.sessions).find(s=>s.id===route.params.sessionId)??null);setError(false);}})
+    void trainingStore.load().then(data=>{if(active){setUnit(weightUnit(data));setSession(completedHistory(data.sessions).find(s=>s.id===route.params.sessionId)??null);setError(false);}})
       .catch(()=>{if(active)setError(true);}).finally(()=>{if(active)setLoading(false);});
     return ()=>{active=false;};
-  },[route.params.sessionId,retry]);
+  },[route.params.sessionId,retry]));
   const summary=session?completionSummary(session):null;
   return <SafeAreaView edges={["left","right"]} style={styles.screen}><ScrollView contentContainerStyle={styles.content}>
     {loading?<ActivityIndicator accessibilityLabel="Loading verified workout summary"/>:error?<>
@@ -28,7 +32,7 @@ export default function WorkoutSummaryScreen({ navigation, route }: NativeStackS
         <Text style={[styles.heading,styles.light]}>{summary.completedExercises} exercises completed</Text>
         <Text style={styles.cardBody}>{summary.completedSets} sets completed</Text>
         <Text style={styles.cardBody}>{elapsedLabel(summary.elapsedMs)}</Text>
-        <Text style={styles.cardBody}>{summary.volumeKg===null?"Weighted volume unavailable":`${Number(summary.volumeKg.toFixed(2))} kg × reps · total lifted volume`}</Text>
+        <Text style={styles.cardBody}>{summary.volumeKg===null?"Weighted volume unavailable":`${weightNumber(fromKilograms(summary.volumeKg, unit))} ${unit} × reps · total lifted volume`}</Text>
       </View>
       <Text style={styles.body}>Elapsed time includes breaks and background time. Volume includes only completed sets with recorded weight and reps.</Text>
       <Pressable accessibilityRole="button" style={[styles.button,styles.outline]} onPress={()=>navigation.replace("WorkoutDetail",{sessionId:session.id})}><Text style={styles.buttonText}>View saved workout</Text></Pressable>

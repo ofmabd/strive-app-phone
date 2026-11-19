@@ -5,7 +5,6 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useIsFocused } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
-import { GestureHandlerRootView } from "react-native-gesture-handler";
 import TrainScreen from "../TrainScreen";
 import { trainingStore } from "../appStores";
 import WorkoutHistoryScreen, { WorkoutDetailScreen } from "./WorkoutHistoryScreen";
@@ -59,7 +58,7 @@ function TrainingPlaceholder({ navigation, route }: PlaceholderProps) {
 }
 export default function TrainingNavigator() {
   const focused = useIsFocused();
-  return <GestureHandlerRootView style={{ flex: 1 }}>
+  return <>
     {focused && <StatusBar style="dark" />}
     <Stack.Navigator initialRouteName="TrainHome" screenOptions={{ headerStyle: { backgroundColor: colors.paper }, headerTintColor: colors.ink,
       headerShadowVisible: false, contentStyle: { backgroundColor: colors.paper } }}>
@@ -72,5 +71,5 @@ export default function TrainingNavigator() {
       <Stack.Screen name="WorkoutDetail" component={WorkoutDetailScreen} options={{ title: "Workout details" }} />
       <Stack.Screen name="ResumeWorkout" component={ActiveWorkoutScreen} options={{ title: "Workout" }} />
     </Stack.Navigator>
-  </GestureHandlerRootView>;
+  </>;
 }

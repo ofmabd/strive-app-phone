@@ -9,6 +9,7 @@ import { consecutiveSuccessfulWeeks, isCompletedWorkout, localDate, weeklyProgre
 import type { RootStackParamList } from "./navigationTypes";
 import type { TrainStackParamList } from "./training/navigationTypes";
 import type { TrainingData } from "./training/types";
+import { unfinishedWorkout } from "./training/lifecycle";
 import { hasCompletedSetup } from "./training/setup";
 import { styles } from "./training/styles";
 
@@ -55,7 +56,7 @@ export default function TrainScreen({ navigation }: Props) {
   const today = localDate(new Date());
   const progress = data ? weeklyProgress(data.sessions, data.weeklyTargets, today) : null;
   const streak = data ? consecutiveSuccessfulWeeks(data.sessions, data.weeklyTargets, today) : 0;
-  const unfinished = data?.sessions.find((session) => session.status === "draft" || session.status === "active");
+  const unfinished = data ? unfinishedWorkout(data.sessions) : null;
   const hasHistory = data?.sessions.some(isCompletedWorkout);
   const recommendation = score === null ? null : score >= 80 ? "PUSH" : score < 50 ? "RECOVER" : "MAINTAIN";
 
@@ -97,10 +98,10 @@ export default function TrainScreen({ navigation }: Props) {
           </Pressable>}
         </View>
         {unfinished && !loading && <View style={styles.divider}>
-          <Text style={styles.heading} accessibilityRole="header">Workout in progress</Text>
-          <Text style={styles.body}>{unfinished.name}</Text>
-          <Pressable accessibilityRole="button" style={styles.button} onPress={() => navigation.navigate("ResumeWorkout", { sessionId: unfinished.id })}>
-            <Text style={styles.buttonText}>Resume workout</Text>
+          <Text style={styles.heading} accessibilityRole="header">{unfinished.kind === "resume" ? "Workout in progress" : "Saved workout plan"}</Text>
+          <Text style={styles.body}>{unfinished.session.name}</Text>
+          <Pressable accessibilityRole="button" style={styles.button} onPress={() => navigation.navigate("ResumeWorkout", { sessionId: unfinished.session.id })}>
+            <Text style={styles.buttonText}>{unfinished.kind === "resume" ? "Resume workout" : "Review saved plan"}</Text>
           </Pressable>
         </View>}
         <View style={styles.divider}>

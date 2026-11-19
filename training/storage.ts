@@ -1,8 +1,10 @@
 import { clearRestTimer } from "./restTimer";
 import { finishWorkout } from "./manual";
+import { unfinishedWorkout, isUnfinished } from "./lifecycle";
+import { inputWeight } from "./weightUnits";
 import { MUSCLES, EXERCISE_EQUIPMENT, BUILT_IN_EXERCISES } from "./catalog";
 import { isCompletedWorkout, parseLocalDate, weekStart } from "./consistency";
-import type { Exercise, TrainingData, TrainingProfile, RecordMetadata, WorkoutSession } from "./types";
+import type { Exercise, TrainingData, TrainingProfile, RecordMetadata, WorkoutSession, WeightUnit } from "./types";
 
 export const TRAINING_KEY = "strive:training:data:v1";
 type Storage = {
@@ -122,6 +124,7 @@ function session(value: unknown) {
 }
 export function validateTrainingData(value: unknown): TrainingData {
   record(value); check(value.schemaVersion === 1);
+  if (value.preferences !== undefined) { record(value.preferences); unit(value.preferences.weightUnit); }
   if (value.profile !== null) profile(value.profile);
   list(value.exercises); value.exercises.forEach(exercise);
   list(value.sessions); value.sessions.forEach(session);
@@ -190,6 +193,15 @@ export function createTrainingStore(storage: Storage) {
   function copy<T>(value: T): T { return JSON.parse(JSON.stringify(value)) as T; }
   return {
     load: () => serialize(async () => (await read()).data),
+    setWeightUnit: (preferred: WeightUnit, now: string) => update(data => {
+      unit(preferred); instant(now);
+      const incomplete = data.sessions.filter(isUnfinished).flatMap(session => session.exercises.flatMap(exercise => exercise.sets));
+      if (incomplete.some(set => inputWeight(set, preferred).unit !== preferred)) {
+        throw new Error("Complete or clear unfinished weight entries before changing units. Your entries have been preserved.");
+      }
+      data.preferences = { ...data.preferences, weightUnit: preferred };
+      if (data.profile) data.profile = { ...data.profile, preferredWeightUnit: preferred, updatedAt: now };
+    }),
     setExerciseFavorite: (id: string, favorite: boolean) => update((data) => {
       text(id);
       const old = data.exercisePreferences ?? { favoriteIds: [], recentIds: [] };
@@ -201,7 +213,7 @@ export function createTrainingStore(storage: Storage) {
       return update((data) => {
         profile(input);
         if (data.profile && data.profile.id !== input.id) throw new Error("Training profile identity cannot change.");
-        data.profile = input;
+        data.profile = data.preferences ? { ...input, preferredWeightUnit: data.preferences.weightUnit } : input;
         snapshot(data, today, input.updatedAt);
       });
     },
@@ -216,16 +228,17 @@ export function createTrainingStore(storage: Storage) {
     },
     beginManualSession: async (value: WorkoutSession, initialProfile?: TrainingProfile): Promise<WorkoutSession> => {
       session(value);
-      check(value.status === "active" && value.source === "manual");
+      check((value.status === "active" || value.status === "draft") && value.source === "manual");
       const input = copy(value);
       const proposedProfile = initialProfile ? copy(initialProfile) : undefined;
       return update((data) => {
-        const existing = data.sessions.find((item) => item.status === "draft" || item.status === "active");
-        if (existing) return existing;
+        const existing = unfinishedWorkout(data.sessions);
+        if (existing) return existing.session;
         if (data.sessions.some((item) => item.id === input.id)) throw new Error("Session ID already used.");
         if (data.profile === null) {
           if (!proposedProfile) throw new Error("Choose a weekly target before starting.");
-          profile(proposedProfile); data.profile = proposedProfile;
+          profile(proposedProfile);
+          data.profile = data.preferences ? { ...proposedProfile, preferredWeightUnit: data.preferences.weightUnit } : proposedProfile;
         }
         const knownIds = new Set([...BUILT_IN_EXERCISES, ...data.exercises].map((item) => item.id));
         check(input.exercises.length > 0 && input.exercises.every((item) => knownIds.has(item.exerciseId)));
@@ -246,6 +259,18 @@ export function createTrainingStore(storage: Storage) {
       snapshot(data, completed.completedOn, now);
       data.sessions[index] = completed;
       return completed;
+    }),
+    discardSession: (id: string, expectedUpdatedAt: string, now: string): Promise<WorkoutSession> => update(data => {
+      instant(now);
+      const index = data.sessions.findIndex(item => item.id === id);
+      if (index < 0) throw new Error("Workout not found.");
+      const current = data.sessions[index];
+      if (current.status === "discarded") return current;
+      if (!isUnfinished(current)) throw new Error("A completed workout cannot be discarded.");
+      if (current.updatedAt !== expectedUpdatedAt) throw new Error("Workout changed before discarding. Reopen it before trying again.");
+      const discarded: WorkoutSession = clearRestTimer({ ...current, status: "discarded", discardedAt: now, updatedAt: now });
+      data.sessions[index] = discarded;
+      return discarded;
     }),
     saveSession: async (value: WorkoutSession) => {
       if (value.status === "completed" || value.status === "discarded") value = clearRestTimer(value);
