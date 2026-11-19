@@ -9,8 +9,9 @@ import { styles } from "./styles";
 import { manualStyles as ui } from "./manualStyles";
 
 type Props = { saved: Exercise[]; selected: string[]; toggle?: boolean; disabled?: boolean;
+  favorites?: { ids: string[]; saving: boolean; toggle: (id: string) => void };
   onChoose: (exercise: Exercise) => void; onCreated: (exercise: Exercise) => void };
-export default function ExercisePicker({ saved, selected, toggle = false, disabled, onChoose, onCreated }: Props) {
+export default function ExercisePicker({ saved, selected, toggle = false, disabled, favorites, onChoose, onCreated }: Props) {
   const [query, setQuery] = useState("");
   const [custom, setCustom] = useState(false);
   const [name, setName] = useState("");
@@ -25,8 +26,12 @@ export default function ExercisePicker({ saved, selected, toggle = false, disabl
   const [pendingFavorite,setPendingFavorite]=useState(false);
   const [retryPreferences,setRetryPreferences]=useState(0);
   useEffect(()=>{let active=true;void trainingStore.load().then(data=>{if(active){setPreferences(data);setPreferenceError(false);}}).catch(()=>{if(active)setPreferenceError(true);});return()=>{active=false;};},[retryPreferences]);
-  const sections=pickerSections({...preferences, schemaVersion:1, profile:preferences?.profile??null, sessions:preferences?.sessions??[],weeklyTargets:preferences?.weeklyTargets??[],exercises:saved},query);
+  const favoriteIds = favorites?.ids ?? preferences?.exercisePreferences?.favoriteIds ?? [];
+  const favoriteDisabled = disabled || (favorites ? favorites.saving : !preferences || pendingFavorite);
+  const sections=pickerSections({...preferences, schemaVersion:1, profile:preferences?.profile??null, sessions:preferences?.sessions??[],weeklyTargets:preferences?.weeklyTargets??[],exercises:saved,
+    exercisePreferences: { favoriteIds, recentIds: preferences?.exercisePreferences?.recentIds ?? [] }},query);
   async function favorite(id:string){
+    if (favorites) { favorites.toggle(id); return; }
     if(!preferences||pendingFavorite)return;
     setPendingFavorite(true);
     const selected=!preferences.exercisePreferences?.favoriteIds.includes(id);
@@ -63,8 +68,8 @@ export default function ExercisePicker({ saved, selected, toggle = false, disabl
         style={[styles.option, {flex:1}, checked && styles.selected]} onPress={() => onChoose(exercise)}>
         <Text style={styles.buttonText}>{exercise.name}{checked ? "  ✓" : ""}</Text>
         <Text style={ui.caption}>{exercise.primaryMuscle ? label(exercise.primaryMuscle) : "Legacy exercise"} · {exercise.equipment ? label(exercise.equipment) : "Equipment not recorded"}</Text>
-      </Pressable><Pressable accessibilityRole="button" accessibilityLabel={`${preferences?.exercisePreferences?.favoriteIds.includes(exercise.id)?"Unfavorite":"Favorite"} ${exercise.name}`} accessibilityState={{disabled:!preferences||pendingFavorite||disabled}} disabled={!preferences||pendingFavorite||disabled} style={ui.chip} onPress={()=>void favorite(exercise.id)}>
-        <Text style={styles.buttonText}>{preferences?.exercisePreferences?.favoriteIds.includes(exercise.id)?"★":"☆"}</Text>
+      </Pressable><Pressable accessibilityRole="button" accessibilityLabel={`${favoriteIds.includes(exercise.id)?"Unfavorite":"Favorite"} ${exercise.name}`} accessibilityState={{disabled:favoriteDisabled}} disabled={favoriteDisabled} style={ui.chip} onPress={()=>void favorite(exercise.id)}>
+        <Text style={styles.buttonText}>{favoriteIds.includes(exercise.id)?"★":"☆"}</Text>
       </Pressable></View>;
     })}</View>)}
     <Pressable accessibilityRole="button" accessibilityState={{ expanded: custom }} style={styles.link} disabled={disabled || saving} onPress={() => setCustom((value) => !value)}>

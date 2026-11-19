@@ -91,11 +91,14 @@ export function finishWorkout(session: WorkoutSession, now: string): WorkoutSess
   if (!summary.canFinish) throw new Error("Complete at least one set before finishing.");
   return clearRestTimer({ ...session, status: "completed", updatedAt: now, completedAt: now, completedOn: localDate(new Date(now)), finishedEarly: summary.unfinished > 0 });
 }
-export function previousPerformance(sessions: readonly WorkoutSession[], exerciseId: string, currentId: string): WorkoutSet[] {
+export function previousExerciseSets(sessions: readonly WorkoutSession[], exerciseId: string, currentId: string): WorkoutSet[] {
   const previous = sessions.filter((session) => session.id !== currentId && session.status === "completed" &&
     session.exercises.some((item) => item.exerciseId === exerciseId && item.sets.some((set) => set.completed)))
     .sort((a, b) => (b.status === "completed" ? b.completedAt : "").localeCompare(a.status === "completed" ? a.completedAt : ""))[0];
-  return previous?.exercises.filter((item) => item.exerciseId === exerciseId).flatMap((item) => item.sets.filter((set) => set.completed)) ?? [];
+  return previous?.exercises.filter((item) => item.exerciseId === exerciseId).flatMap((item) => item.sets) ?? [];
+}
+export function previousPerformance(sessions: readonly WorkoutSession[], exerciseId: string, currentId: string): WorkoutSet[] {
+  return previousExerciseSets(sessions, exerciseId, currentId).filter((set) => set.completed);
 }
 export function displayWeight(weightKg: number | null, unit: WeightUnit): string {
   return weightKg === null ? "unweighted" : `${Number((weightKg / (unit === "lb" ? 0.45359237 : 1)).toFixed(2))} ${unit}`;

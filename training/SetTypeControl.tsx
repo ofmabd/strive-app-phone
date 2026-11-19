@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Keyboard, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import type { SetType, WorkoutSet } from "./types";
 import { SET_TYPES, setType } from "./setTypes";
 import { styles } from "./styles";
@@ -9,23 +9,28 @@ export function SetBadge({ set, label, compact = false }: { set: WorkoutSet; lab
     <Text style={[styles.buttonText, { color: kind.color }]}>{label}</Text>
   </View>;
 }
-export default function SetTypeControl({ set, label, disabled, onChange, onRemove, compact = false }: {
-  set: WorkoutSet; label: string; disabled: boolean; onChange: (type: SetType) => void; onRemove?: () => void; compact?: boolean;
+export default function SetTypeControl({ set, label, disabled, onChange, onDelete, revealDelete, compact = false }: {
+  set: WorkoutSet; label: string; disabled: boolean; onChange: (type: SetType) => void; onDelete?: () => void; revealDelete?: () => void; compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const kind = SET_TYPES.find((item) => item.value === setType(set))!;
   return <>
-    <Pressable accessibilityRole="button" accessibilityLabel={`${kind.name} set ${label}. Change set type or remove set`} disabled={disabled} onPress={() => setOpen(true)}>
+    <Pressable accessibilityRole="button" accessibilityLabel={`${kind.name} set ${label}. Change set type`}
+      accessibilityHint="Hold to reveal Delete. Screen reader actions also offer Delete set."
+      accessibilityActions={onDelete ? [{ name: "delete", label: "Delete set" }] : undefined}
+      onAccessibilityAction={(event) => { if (!disabled && event.nativeEvent.actionName === "delete") onDelete?.(); }}
+      disabled={disabled} onLongPress={revealDelete} onPress={() => { Keyboard.dismiss(); setOpen(true); }}>
       <SetBadge set={set} label={label} compact={compact} />
     </Pressable>
     <Modal transparent visible={open} animationType="fade" onRequestClose={() => setOpen(false)}>
-      <View style={badgeStyles.overlay}><ScrollView style={badgeStyles.scroll} contentContainerStyle={badgeStyles.sheet} accessibilityViewIsModal>
+      <View style={badgeStyles.overlay}>
+        <Pressable style={StyleSheet.absoluteFill} accessibilityRole="button" accessibilityLabel="Close set types" onPress={() => setOpen(false)} />
+        <ScrollView style={badgeStyles.scroll} contentContainerStyle={badgeStyles.sheet} accessibilityViewIsModal>
         <Text style={styles.heading} accessibilityRole="header">Set type</Text>
         {SET_TYPES.map((item) => <Pressable key={item.value} accessibilityRole="radio" accessibilityState={{ checked: setType(set) === item.value, disabled }} disabled={disabled}
           style={[styles.option, { backgroundColor: item.background }]} onPress={() => { onChange(item.value); setOpen(false); }}>
           <Text style={[styles.buttonText, { color: item.color }]}>{item.mark ? `${item.mark} · ` : ""}{item.name}</Text>
         </Pressable>)}
-        {onRemove && <Pressable accessibilityRole="button" disabled={disabled} style={styles.link} onPress={()=>{setOpen(false);onRemove();}}><Text style={styles.linkText}>Remove set</Text></Pressable>}
         <Pressable accessibilityRole="button" style={styles.button} onPress={() => setOpen(false)}><Text style={styles.buttonText}>Cancel</Text></Pressable>
       </ScrollView></View>
     </Modal>

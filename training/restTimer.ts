@@ -1,5 +1,12 @@
 import type { TimerPreferences, WorkoutSession } from "./types";
 
+export function timerExercise(session: WorkoutSession) {
+  if (!session.restTimer) return undefined;
+  return session.exercises.find((item) => item.id === session.restTimer?.exerciseId)
+    ?? session.exercises.find((item) => item.sets.some((set) => set.id === session.restTimer?.triggerSetId))
+    ?? (!session.restTimer.exerciseId && !session.restTimer.triggerSetId ? session.exercises[0] : undefined);
+}
+
 function editable(session: WorkoutSession) {
   if (session.status !== "active" && session.status !== "draft") throw new Error("This workout is finalized.");
 }
