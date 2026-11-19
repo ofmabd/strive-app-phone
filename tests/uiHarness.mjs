@@ -15,9 +15,11 @@ export { React, act };
 
 export function uiHarness() {
   const modules = new Map(), mounted = [];
-  const env = { focusedInput: null, dismissed: 0, alerts: [], events: [], storageFailure: false };
+  const env = { focusedInput: null, dismissed: 0, alerts: [], events: [], storageFailure: false, headerOptions: {} };
+  const headerListeners = new Set();
   const map = new Map();
   const storage = { getItem: async key => map.get(key) ?? null, setItem: async (key, value) => {
+    if (env.beforeWrite) await env.beforeWrite();
     if (env.storageFailure) throw new Error("Storage failed"); map.set(key, value);
   } };
   const Keyboard = { dismiss: () => { env.dismissed++; env.focusedInput = null; } };
@@ -34,7 +36,16 @@ export function uiHarness() {
     AppState: { currentState: "background", addEventListener: () => ({ remove() {} }) },
     useWindowDimensions: () => ({ width: 390, height: 844, fontScale: 1, scale: 3 }) });
   const navigation = { isFocused: () => true, replace: (...args) => env.events.push(["replace", ...args]),
-    navigate: (...args) => env.events.push(["navigate", ...args]), popTo: (...args) => env.events.push(["popTo", ...args]), dispatch() {} };
+    navigate: (...args) => env.events.push(["navigate", ...args]), popTo: (...args) => env.events.push(["popTo", ...args]), dispatch() {},
+    goBack: () => env.events.push(["goBack"]), setOptions: options => { env.headerOptions = { ...env.headerOptions, ...options }; headerListeners.forEach(listener => listener()); } };
+  // Native-stack renders these options outside the scrollable screen in the app.
+  function NativeHeader() {
+    const options = React.useSyncExternalStore(listener => { headerListeners.add(listener); return () => headerListeners.delete(listener); }, () => env.headerOptions);
+    if (!options.headerRight) return null;
+    return React.createElement("NativeHeader", { title: options.title },
+      React.createElement("Pressable", { accessibilityLabel: "Back", onPress: navigation.goBack }, "Back"),
+      React.createElement("Text", null, options.title), options.headerRight());
+  }
   function Swipeable(props) {
     const [open, setOpen] = React.useState(false);
     React.useImperativeHandle(props.ref, () => ({ close: () => setOpen(false), openRight: () => setOpen(true) }), []);
@@ -83,7 +94,11 @@ export function uiHarness() {
   env.store = load("storage").createTrainingStore(storage);
   async function mount(name, props = {}) {
     let renderer;
-    await act(async () => { renderer = create(React.createElement(load(name).default, props)); });
+    await act(async () => {
+      const screen = React.createElement(load(name).default, props);
+      renderer = create(name === "training/ActiveWorkoutScreen.tsx"
+        ? React.createElement(React.Fragment, null, React.createElement(NativeHeader), screen) : screen);
+    });
     mounted.push(renderer); return renderer;
   }
   async function cleanup() { for (const renderer of mounted) await act(async () => renderer.unmount()); }

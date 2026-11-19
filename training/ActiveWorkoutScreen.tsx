@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { ActivityIndicator, Alert, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { useFocusEffect, usePreventRemove } from "@react-navigation/native";
@@ -72,6 +72,17 @@ function SessionEditor({ initial, data, navigation }: { initial: WorkoutSession;
   const [unit, setUnit] = useState<WeightUnit>(() => weightUnit(data));
   const [unitError, setUnitError] = useState(false);
   const now = useRestClock(state.session);
+  // Timer ticks do not change historical references. Recompute only when the
+  // saved history, current sets/types or displayed unit changes.
+  const references = useMemo(() => {
+    const matches = new Map<string, ReturnType<typeof previousSetReference>>();
+    for (const movement of state.session.exercises) {
+      for (const set of movement.sets) {
+        matches.set(set.id, previousSetReference(data.sessions, movement, set.id, state.session.id, inputWeight(set, unit).unit));
+      }
+    }
+    return matches;
+  }, [data.sessions, state.session.exercises, state.session.id, unit]);
   useEffect(() => {
     if (!undo) return;
     const timeout = setTimeout(() => setUndo(null), Math.max(0, undo.expires - Date.now()));
@@ -180,6 +191,22 @@ function SessionEditor({ initial, data, navigation }: { initial: WorkoutSession;
     ], { cancelable: false });
   }
   const summary = finishSummary(state.session);
+  const finishCommand = useRef<() => void>(() => {});
+  finishCommand.current = () => pendingDiscard ? void discard() : pendingFinish ? void finish() : confirmFinish();
+  const finishLabel = finishing ? "Verifying workout" : pendingDiscard ? "Retry discard verification" : pendingFinish ? "Retry finish verification" : "Finish workout";
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      title: state.session.name,
+      headerBackButtonDisplayMode: "minimal",
+      headerTitleStyle: { fontSize: 17, fontWeight: "600" },
+      headerRight: () => <Pressable accessibilityRole="button" accessibilityLabel={finishLabel}
+        accessibilityState={{ disabled: finishing || confirming }} disabled={finishing || confirming}
+        style={[activeStyles.headerFinish, (finishing || confirming) && styles.disabled]} onPress={() => finishCommand.current()}>
+        <Text style={activeStyles.actionText}>{finishing ? "Saving…" : pendingFinish || pendingDiscard ? "Retry" : "Finish"}</Text>
+      </Pressable>,
+    });
+  }, [navigation, state.session.name, finishLabel, finishing, confirming, pendingFinish, pendingDiscard]);
+  useLayoutEffect(() => () => navigation.setOptions({ title: "Workout", headerRight: undefined }), [navigation]);
   return <GestureHandlerRootView style={styles.screen}><SafeAreaView edges={["left", "right"]} style={styles.screen}>
     <KeyboardAvoidingView style={styles.screen} onTouchStart={dismissKeyboardOutsideInput} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={insets.top + 44}>
       {undo && <View style={activeStyles.notice} accessibilityLiveRegion="polite">
@@ -188,17 +215,19 @@ function SessionEditor({ initial, data, navigation }: { initial: WorkoutSession;
           if (edit(current => restoreSet(current, undo, new Date().toISOString()))) setUndo(null);
         }}><Text style={activeStyles.actionText}>Undo</Text></Pressable>
       </View>}
+      <View style={activeStyles.statusBar}>
+        <Text style={activeStyles.caption} accessibilityLabel={`${summary.completed} completed sets, ${summary.unfinished} unfinished sets`}>{summary.completed} / {summary.completed + summary.unfinished} sets</Text>
+        <Text style={[activeStyles.saveStatus, state.error && styles.error]} accessibilityRole={state.error ? "alert" : undefined} accessibilityLiveRegion="polite">
+          {state.error ? "Not saved" : state.dirty || state.saving ? "Saving…" : "Saved"}
+        </Text>
+        {state.error && <Pressable accessibilityRole="button" accessibilityLabel="Retry saving workout edits" disabled={finishing} style={activeStyles.smallAction}
+          onPress={() => { Keyboard.dismiss(); void draft.flush().catch(() => {}); }}><Text style={activeStyles.actionText}>Retry</Text></Pressable>}
+      </View>
       <ScrollView contentContainerStyle={[styles.content, activeStyles.content]} keyboardShouldPersistTaps="always" keyboardDismissMode="on-drag">
-        <View style={activeStyles.section}>
-          <Text style={[styles.title, activeStyles.title]} accessibilityRole="header">{state.session.name}</Text>
-          <Text style={state.error ? styles.error : ui.saved} accessibilityLiveRegion="polite">
-            {state.error ? `Not saved: ${state.error} Latest edits are kept on this screen. Keep the app open and retry.` : state.dirty || state.saving ? "Saving edits…" : "Saved"}
-          </Text>
-          {unitError && <Text style={styles.error} accessibilityRole="alert">Weight preference could not be refreshed. Displayed units are unchanged; reopen the workout to retry.</Text>}
-          {favoriteError && <Text style={styles.error} accessibilityRole="alert">{favoriteError}</Text>}
-          {state.error && <Pressable accessibilityRole="button" disabled={finishing} style={styles.button} onPress={() => { void draft.flush().catch(() => {}); }}><Text style={styles.buttonText}>Retry saving edits</Text></Pressable>}
-        </View>
-        {state.session.exercises.length === 0 && <Text style={styles.body}>No exercises remain. Add an exercise to continue; this unfinished workout does not count toward consistency.</Text>}
+        {state.error && <Text style={styles.error} accessibilityRole="alert">{state.error} Latest edits remain in this workout. Keep the app open and retry.</Text>}
+        {unitError && <Text style={styles.error} accessibilityRole="alert">Weight preference could not be refreshed. Displayed units are unchanged; reopen the workout to retry.</Text>}
+        {favoriteError && <Text style={styles.error} accessibilityRole="alert">{favoriteError}</Text>}
+        {state.session.exercises.length === 0 && <Text style={styles.body}>Add an exercise to continue.</Text>}
         {state.session.exercises.map((movement) => {
           const open = expanded.has(movement.id);
           const name = exerciseName(movement.exerciseId, movement.name);
@@ -225,11 +254,11 @@ function SessionEditor({ initial, data, navigation }: { initial: WorkoutSession;
             {open && <ExerciseRestControl session={state.session} exerciseId={movement.id} disabled={blocked} edit={edit} />}
             {open && <>
               <View style={[ui.setRow, activeStyles.setRow]} accessible accessibilityLabel="Columns: Set, Weight, Reps, Complete">
-                <Text style={{width:44}}>{editSets === movement.id ? "Delete" : "Set"}</Text><Text style={ui.field}>Weight ({unit})</Text><Text style={ui.field}>Reps</Text><Text style={{width:44}}>Done</Text>
+                <Text style={[activeStyles.column, { width: 44 }]}>{editSets === movement.id ? "Delete" : "Set"}</Text><Text style={[ui.field, activeStyles.column]}>Weight ({unit})</Text><Text style={[ui.field, activeStyles.column]}>Reps</Text><Text style={[activeStyles.column, { width: 44, textAlign: "center" }]}>Complete</Text>
               </View>
               {movement.sets.map((set, index) => {
                 const weight = inputWeight(set, unit);
-                const reference = previousSetReference(data.sessions, movement, set.id, state.session.id, weight.unit);
+                const reference = references.get(set.id);
                 const label = `${name} set ${labels[index]}, row ${index + 1}`;
                 const deleteRow = () => deleteSet(movement.id, set.id);
                 return <SwipeSetRow key={set.id} disabled={blocked} editing={editingSetId === set.id} label={label} onDelete={deleteRow}>
@@ -255,7 +284,7 @@ function SessionEditor({ initial, data, navigation }: { initial: WorkoutSession;
                       <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: set.completed, disabled: blocked }} disabled={blocked}
                         accessibilityLabel={`${set.completed ? "Undo" : "Complete"} ${label}`}
                         style={[ui.check, activeStyles.check, set.completed && styles.selected, blocked && styles.disabled]}
-                        onPress={() => { Keyboard.dismiss(); setRestExerciseId(movement.id); edit((current) => toggleSet(current, movement.id, set.id, new Date().toISOString())); }}><Text style={ui.checkText}>{set.completed ? "✓" : "○"}</Text></Pressable>
+                        onPress={() => { Keyboard.dismiss(); setRestExerciseId(movement.id); edit((current) => toggleSet(current, movement.id, set.id, new Date().toISOString())); }}><Text style={ui.checkText}>{set.completed ? "✓" : ""}</Text></Pressable>
                     </View>
                     {weight.unit !== unit && <Text style={styles.error}>Finish or clear this {weight.unit} entry to use {unit}.</Text>}
                   </View>}
@@ -273,8 +302,8 @@ function SessionEditor({ initial, data, navigation }: { initial: WorkoutSession;
             </>}
           </View>;
         })}
-        {!pendingFinish && <Pressable accessibilityRole="button" disabled={blocked} accessibilityState={{ expanded: picker }} style={[styles.button, styles.outline]} onPress={() => { Keyboard.dismiss(); setPicker((value) => !value); }}>
-          <Text style={styles.buttonText}>{picker ? "Close exercise library" : "Add exercises"}</Text>
+        {!pendingFinish && <Pressable accessibilityRole="button" disabled={blocked} accessibilityState={{ expanded: picker }} style={activeStyles.inlineAction} onPress={() => { Keyboard.dismiss(); setPicker((value) => !value); }}>
+          <Text style={activeStyles.actionText}>{picker ? "Close exercise library" : "+ Add exercises"}</Text>
         </Pressable>}
         {picker && !pendingFinish && <ExercisePicker saved={catalog} selected={state.session.exercises.map((item) => item.exerciseId)} disabled={blocked}
           favorites={{ ids: favorites, saving: favoriteBusy.length > 0, toggle: id => void toggleFavorite(id) }}
@@ -285,17 +314,15 @@ function SessionEditor({ initial, data, navigation }: { initial: WorkoutSession;
             return next;
           })} />}
         <View style={[styles.divider, activeStyles.finish]}>
-          <Text style={styles.body}>{summary.completed} completed sets · {summary.unfinished} unfinished sets</Text>
           {finishError && <Text style={styles.error} accessibilityRole="alert">{finishError} The operation was not confirmed. {pendingFinish || pendingDiscard ? "Editing is paused while persistence is uncertain. Retry to check the saved result." : "Retry saving your edits before finishing."}</Text>}
-          <Pressable accessibilityRole="button" disabled={finishing || confirming} style={[styles.button, activeStyles.finishButton, (finishing || confirming) && styles.disabled]}
-            onPress={() => pendingDiscard ? void discard() : pendingFinish ? void finish() : confirmFinish()}><Text style={styles.buttonText}>{finishing ? "Verifying…" : pendingDiscard ? "Retry discard verification" : pendingFinish ? "Retry finish verification" : "Finish workout"}</Text></Pressable>
           {!pendingFinish && !pendingDiscard && <Pressable accessibilityRole="button" disabled={blocked} style={activeStyles.inlineAction} onPress={confirmDiscard}><Text style={activeStyles.caption}>Discard workout</Text></Pressable>}
         </View>
       </ScrollView>
       <RestTimer session={state.session} exerciseId={restExerciseId} now={now} disabled={blocked} edit={edit} />
-      {reordering && <ReorderExercises exercises={state.session.exercises} onClose={ids => {
-        edit(current => reorderExercises(current, ids, new Date().toISOString())); setReordering(false);
-      }} />}
+      {reordering && <ReorderExercises exercises={state.session.exercises} onReorder={async ids => {
+        if (!edit(current => reorderExercises(current, ids, new Date().toISOString()))) throw new Error("Order was not changed. Try again.");
+        await draft.flush();
+      }} onClose={() => setReordering(false)} />}
     </KeyboardAvoidingView>
   </SafeAreaView></GestureHandlerRootView>;
 }
@@ -304,9 +331,12 @@ const activeStyles = StyleSheet.create({
   notice: { minHeight: 44, flexDirection: "row", alignItems: "center", paddingHorizontal: 16, gap: 12, backgroundColor: "#E4E9DC" },
   noticeText: { flex: 1, color: "#15191C", fontSize: 14 },
   smallAction: { minHeight: 44, minWidth: 44, justifyContent: "center", alignItems: "center" },
-  content: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 20, gap: 12 },
-  section: { gap: 4 }, title: { fontSize: 24, lineHeight: 30 },
-  exercise: { padding: 10, gap: 4 },
+  content: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 12, gap: 8 },
+  headerFinish: { minHeight: 44, minWidth: 64, paddingHorizontal: 12, alignItems: "center", justifyContent: "center", backgroundColor: "#B9C9A5", borderRadius: 6 },
+  statusBar: { minHeight: 44, paddingHorizontal: 16, flexDirection: "row", alignItems: "center", gap: 12 },
+  saveStatus: { flex: 1, textAlign: "right", color: "#515C5F", fontSize: 12 },
+  column: { color: "#515C5F", fontSize: 11, fontWeight: "600", paddingBottom: 4 },
+  exercise: { borderWidth: 0, borderTopWidth: StyleSheet.hairlineWidth, borderRadius: 0, padding: 0, paddingTop: 8, paddingBottom: 4, gap: 4 },
   cardHeader: { flexDirection: "row", alignItems: "center", gap: 0 },
   exerciseHeader: { flex: 1, minWidth: 0, minHeight: 44, flexDirection: "row", alignItems: "center", gap: 6 },
   exerciseName: { fontSize: 18, lineHeight: 24 },
@@ -317,5 +347,5 @@ const activeStyles = StyleSheet.create({
   deleteSet: { width: 44, minHeight: 44, justifyContent: "center", alignItems: "center" }, deleteText: { color: "#8B302A", fontSize: 26, fontWeight: "600" },
   set: { paddingTop: 2 }, setRow: { gap: 6 }, input: { paddingVertical: 6, minHeight: 44 },
   weightInput: { paddingRight: 24 }, unit: { position: "absolute", right: 6, top: 0, bottom: 0, justifyContent: "center" }, unitText: { color: "#515C5F", fontSize: 11 },
-  check: { width: 44, minHeight: 44 }, finish: { paddingTop: 12, gap: 8 }, finishButton: { minHeight: 48, paddingVertical: 10 },
+  check: { width: 44, minHeight: 44 }, finish: { borderTopWidth: 0, paddingTop: 0, gap: 8 },
 });

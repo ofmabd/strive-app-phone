@@ -8,51 +8,68 @@ import { exerciseName } from "./catalog";
 import WorkoutIcon from "./WorkoutIcon";
 import { colors, styles } from "./styles";
 
-export default function ReorderExercises({ exercises, onClose }: { exercises: SessionExercise[]; onClose: (ids: string[]) => void }) {
+export default function ReorderExercises({ exercises, onReorder, onClose }: {
+  exercises: SessionExercise[]; onReorder: (ids: string[]) => Promise<void>; onClose: () => void;
+}) {
   const [order, setOrder] = useState(exercises);
   const [dragging, setDragging] = useState(false);
   const latest = useRef(order);
   const draggingRef = useRef(false);
+  const savingRef = useRef(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
   const insets = useSafeAreaInsets();
   const window = useWindowDimensions();
   const sheetHeight = Math.max(200, Math.min(window.height - insets.top - insets.bottom - 48, 140 + order.length * 76 * window.fontScale));
   function update(next: SessionExercise[]) { latest.current = next; setOrder(next); }
-  function close() { if (!draggingRef.current) onClose(latest.current.map((item) => item.id)); }
+  function close() { if (!draggingRef.current && !savingRef.current) onClose(); }
+  async function persist(next: SessionExercise[]) {
+    if (savingRef.current) return;
+    update(next); savingRef.current = true; setSaving(true); setError(null); setSaved(false);
+    try { await onReorder(next.map(item => item.id)); setSaved(true); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : "Order could not be saved."); }
+    finally { savingRef.current = false; setSaving(false); }
+  }
   function move(index: number, direction: -1 | 1) {
     const next = [...latest.current];
     const destination = index + direction;
-    if (destination < 0 || destination >= next.length || draggingRef.current) return;
+    if (destination < 0 || destination >= next.length || draggingRef.current || savingRef.current) return;
     [next[index], next[destination]] = [next[destination], next[index]];
-    update(next);
+    void persist(next);
   }
   return <Modal transparent visible animationType="fade" onShow={Keyboard.dismiss} onRequestClose={close}>
     <GestureHandlerRootView style={reorderStyles.root}>
-      <Pressable style={StyleSheet.absoluteFill} accessibilityRole="button" accessibilityLabel="Save order and close" disabled={dragging} onPress={close} />
+      <Pressable style={StyleSheet.absoluteFill} accessibilityRole="button" accessibilityLabel="Close exercise reordering" disabled={dragging || saving} onPress={close} />
       <View accessibilityViewIsModal onAccessibilityEscape={close} style={[reorderStyles.sheet, { height: sheetHeight, marginTop: insets.top + 16, marginBottom: insets.bottom + 16 }]}>
         <View style={reorderStyles.header}>
           <Text style={[styles.heading, { flex: 1 }]} accessibilityRole="header">Reorder exercises</Text>
-          <Pressable accessibilityRole="button" disabled={dragging} onPress={close} style={reorderStyles.action}><Text style={styles.buttonText}>Done</Text></Pressable>
+          <Pressable accessibilityRole="button" disabled={dragging || saving} onPress={close} style={reorderStyles.action}><Text style={styles.buttonText}>Done</Text></Pressable>
         </View>
-        <Text style={reorderStyles.caption}>Hold a handle to drag. Order saves on close.</Text>
+        <Text style={reorderStyles.caption} accessibilityLiveRegion="polite">{saving ? "Saving order…" : saved ? "Order saved" : "Hold a handle · saves on release"}</Text>
+        {error && <View>
+          <Text style={styles.error} accessibilityRole="alert">{error} Edits remain in this workout.</Text>
+          <Pressable accessibilityRole="button" style={reorderStyles.action} disabled={saving} onPress={() => void persist(latest.current)}><Text style={styles.buttonText}>Retry saving order</Text></Pressable>
+        </View>}
         <DraggableFlatList data={order} keyExtractor={(item) => item.id}
           containerStyle={{ flex: 1 }}
           style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 8 }}
           autoscrollThreshold={60} autoscrollSpeed={120} activationDistance={8}
           onDragBegin={() => { draggingRef.current = true; setDragging(true); }}
-          onDragEnd={({ data }) => { update(data); draggingRef.current = false; setDragging(false); }}
+          onDragEnd={({ data }) => { draggingRef.current = false; setDragging(false); void persist(data); }}
           renderItem={({ item, drag, isActive, getIndex }) => {
             const index = getIndex() ?? 0;
             const name = exerciseName(item.exerciseId, item.name);
             return <ScaleDecorator activeScale={1.025}>
               <View style={[reorderStyles.row, isActive && reorderStyles.active]}>
                 <Pressable accessibilityRole="button" accessibilityLabel={`Drag ${name}`} accessibilityHint="Touch and hold to reorder. Move up and down buttons are also available."
-                  onLongPress={() => { if (!draggingRef.current) drag(); }} delayLongPress={180} style={reorderStyles.action}>
+                  disabled={saving} onLongPress={() => { if (!draggingRef.current && !savingRef.current) drag(); }} delayLongPress={180} style={reorderStyles.action}>
                   <WorkoutIcon name="grip" />
                 </Pressable>
                 <Text style={reorderStyles.name}>{name}</Text>
                 {([-1, 1] as const).map((direction) => <Pressable key={direction} accessibilityRole="button"
                   accessibilityLabel={`Move ${name} ${direction === -1 ? "up" : "down"}`}
-                  disabled={dragging || (direction === -1 ? index === 0 : index === order.length - 1)}
+                  disabled={dragging || saving || (direction === -1 ? index === 0 : index === order.length - 1)}
                   style={[reorderStyles.action, (direction === -1 ? index === 0 : index === order.length - 1) && styles.disabled]}
                   onPress={() => move(index, direction)}><WorkoutIcon name={direction === -1 ? "chevron-up" : "chevron-down"} /></Pressable>)}
               </View>

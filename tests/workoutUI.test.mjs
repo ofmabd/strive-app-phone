@@ -66,7 +66,7 @@ test("Edit sets is a visible non-swipe delete alternative without a confirmation
   await h.act(async () => remove.props.onPress()); assert.equal(h.env.alerts.length, 0); assert.ok(buttonText(screen, "Undo"));
 }));
 
-test("holding the header opens the real reorder sheet; its handle remains active and drag order autosaves on close", async () => run(async h => {
+test("holding the header opens the real reorder sheet; its handle remains active and drag order autosaves on release", async () => run(async h => {
   const props = await h.prepare(); const screen = await h.mount("training/ActiveWorkoutScreen.tsx", props);
   const header = screen.root.find(node => node.type === "Pressable" && node.props.accessibilityLabel?.endsWith(", collapse"));
   assert.equal(header.props.delayLongPress, 350);
@@ -76,8 +76,9 @@ test("holding the header opens the real reorder sheet; its handle remains active
   assert.notEqual(handle.props.disabled, true);
   const drag = screen.root.findByType("DraggableFlatList"); assert.ok(drag.props.autoscrollThreshold > 0); assert.ok(drag.props.containerStyle.flex > 0);
   await h.act(async () => drag.props.onDragEnd({ data: [...drag.props.data].reverse() }));
-  await h.act(async () => byLabel(screen, "Save order and close").props.onPress());
   const saved = (await h.env.store.load()).sessions[0]; assert.deepEqual(saved.exercises, [...props.current.exercises].reverse());
+  assert.equal(screen.root.findAllByType("DraggableFlatList").length, 1); // Still open: release itself persisted.
+  await h.act(async () => byLabel(screen, "Close exercise reordering").props.onPress());
 }));
 
 test("exercise action backdrop closes, set-type backdrop closes, and keyboard dismissal preserves inputs and input focus changes", async () => run(async h => {
@@ -145,7 +146,7 @@ test("discard confirmation invokes verified storage and reopening Train shows no
 test("verified completion removes Resume, opens Summary, and summary/detail honor Profile units without rewriting loads", async () => run(async h => {
   const props = await h.prepare({ progress: true }); await h.env.store.setWeightUnit("lb", new Date().toISOString());
   const screen = await h.mount("training/ActiveWorkoutScreen.tsx", props);
-  await h.act(async () => buttonText(screen, "Finish workout").props.onPress());
+  await h.act(async () => byLabel(screen, "Finish workout").props.onPress());
   const confirmation = h.env.alerts.at(-1); assert.equal(confirmation[0], "Finish workout?");
   await h.act(async () => confirmation[2].find(button => button.text === "Finish early").onPress());
   const saved = (await h.env.store.load()).sessions[0]; assert.equal(saved.status, "completed"); assert.equal(saved.exercises[0].sets[0].weightKg, 10);
@@ -163,11 +164,11 @@ test("verified completion removes Resume, opens Summary, and summary/detail hono
 test("failed completion remains visibly unverified, locks edits, and retries without duplicate history", async () => run(async h => {
   const props = await h.prepare({ progress: true }); const screen = await h.mount("training/ActiveWorkoutScreen.tsx", props);
   h.env.storageFailure = true;
-  await h.act(async () => buttonText(screen, "Finish workout").props.onPress());
+  await h.act(async () => byLabel(screen, "Finish workout").props.onPress());
   await h.act(async () => h.env.alerts.at(-1)[2].find(button => button.text === "Finish early").onPress());
-  assert.equal(h.env.events.length, 0); assert.ok(buttonText(screen, "Retry finish verification"));
+  assert.equal(h.env.events.length, 0); assert.ok(byLabel(screen, "Retry finish verification"));
   assert.equal(screen.root.find(node => node.type === "Pressable" && node.props.accessibilityRole === "checkbox").props.disabled, true);
-  h.env.storageFailure = false; await h.act(async () => buttonText(screen, "Retry finish verification").props.onPress());
+  h.env.storageFailure = false; await h.act(async () => byLabel(screen, "Retry finish verification").props.onPress());
   const saved = await h.env.store.load(); assert.equal(saved.sessions.length, 1); assert.equal(saved.sessions[0].status, "completed");
 }));
 
@@ -176,8 +177,8 @@ test("failed discard does not navigate away or claim success, and verified retry
   h.env.storageFailure = true;
   await h.act(async () => buttonText(screen, "Discard workout").props.onPress());
   await h.act(async () => h.env.alerts.at(-1)[2].find(button => button.text === "Discard workout").onPress());
-  assert.equal(h.env.events.length, 0); assert.ok(buttonText(screen, "Retry discard verification"));
-  h.env.storageFailure = false; await h.act(async () => buttonText(screen, "Retry discard verification").props.onPress());
+  assert.equal(h.env.events.length, 0); assert.ok(byLabel(screen, "Retry discard verification"));
+  h.env.storageFailure = false; await h.act(async () => byLabel(screen, "Retry discard verification").props.onPress());
   const saved = (await h.env.store.load()).sessions[0]; assert.equal(saved.status, "discarded"); assert.deepEqual(saved.exercises, props.current.exercises);
 }));
 
@@ -195,12 +196,77 @@ test("per-exercise preset selection changes only its next rest, while timer acti
   saved = (await h.env.store.load()).sessions[0]; assert.equal(saved.restTimer.exerciseId, saved.exercises[0].id); assert.equal(saved.exercises[0].restSeconds, 165);
 }));
 
-test("actions-menu reorder waits for native dismissal, and accessible move buttons save on backdrop close", async () => run(async h => {
+test("actions-menu reorder waits for native dismissal, and accessible move buttons save before backdrop close", async () => run(async h => {
   const props = await h.prepare(); const screen = await h.mount("training/ActiveWorkoutScreen.tsx", props);
   const actions = screen.root.findAll(node => node.type === "Pressable" && node.props.accessibilityLabel?.startsWith("Actions for"))[0];
   await h.act(async () => actions.props.onPress()); await h.act(async () => buttonText(screen, "Reorder exercises").props.onPress());
   assert.equal(screen.root.findAllByType("Modal").length, 1);
   const move = screen.root.find(node => node.type === "Pressable" && node.props.accessibilityLabel === `Move ${props.current.exercises[0].name} down`);
-  await h.act(async () => move.props.onPress()); await h.act(async () => byLabel(screen, "Save order and close").props.onPress());
+  await h.act(async () => move.props.onPress());
+  assert.deepEqual((await h.env.store.load()).sessions[0].exercises, [...props.current.exercises].reverse());
+  await h.act(async () => byLabel(screen, "Close exercise reordering").props.onPress());
+}));
+
+test("native workout header retains Back, the real title and Finish outside scrolling without a duplicate body action", async () => run(async h => {
+  const props = await h.prepare();
+  const name = "Lower Body — Long Workout Title";
+  await h.env.store.saveSession({ ...props.current, name });
+  const screen = await h.mount("training/ActiveWorkoutScreen.tsx", props);
+  const header = screen.root.findByType("NativeHeader");
+  assert.equal(header.props.title, name); assert.equal(h.env.headerOptions.headerBackButtonDisplayMode, "minimal");
+  const finish = byLabel(screen, "Finish workout");
+  assert.equal(finish.parent.type, "NativeHeader"); assert.equal(textOf(finish), "Finish"); assert.ok(finish.props.style[0].minHeight >= 44);
+  assert.equal(screen.root.findAllByType("ScrollView").some(scroll => scroll.findAllByProps({ accessibilityLabel: "Finish workout" }).length > 0), false);
+  await h.act(async () => finish.props.onPress()); assert.equal(h.env.alerts.at(-1)[0], "No completed sets");
+  await h.act(async () => byLabel(screen, "Back").props.onPress()); assert.ok(h.env.events.some(event => event[0] === "goBack"));
+}));
+
+test("a failed release-save remains visible and retry verifies order before the reorder sheet closes", async () => run(async h => {
+  const props = await h.prepare({ progress: true }); const screen = await h.mount("training/ActiveWorkoutScreen.tsx", props);
+  const original = structuredClone((await h.env.store.load()).sessions[0]);
+  const header = screen.root.find(node => node.type === "Pressable" && node.props.accessibilityLabel?.endsWith(", collapse"));
+  await h.act(async () => header.props.onLongPress());
+  h.env.storageFailure = true;
+  const drag = screen.root.findByType("DraggableFlatList");
+  await h.act(async () => drag.props.onDragEnd({ data: [...drag.props.data].reverse() }));
+  assert.deepEqual((await h.env.store.load()).sessions[0].exercises, original.exercises);
+  assert.ok(buttonText(screen, "Retry saving order"));
+  assert.equal(screen.root.findAllByType("Text").some(node => textOf(node) === "Order saved"), false);
+  h.env.storageFailure = false;
+  await h.act(async () => buttonText(screen, "Retry saving order").props.onPress());
+  const saved = (await h.env.store.load()).sessions[0];
+  assert.deepEqual(saved.exercises, [...original.exercises].reverse()); assert.deepEqual(saved.restTimer, original.restTimer);
+  assert.ok(screen.root.findAllByType("Text").some(node => textOf(node) === "Order saved"));
+  assert.equal(screen.root.findAllByType("DraggableFlatList").length, 1);
+  await h.act(async () => byLabel(screen, "Close exercise reordering").props.onPress());
+}));
+
+test("reorder cannot close during its release write and marks saved only after persistence resolves", async () => run(async h => {
+  const props = await h.prepare(); const screen = await h.mount("training/ActiveWorkoutScreen.tsx", props);
+  const header = screen.root.find(node => node.type === "Pressable" && node.props.accessibilityLabel?.endsWith(", collapse"));
+  await h.act(async () => header.props.onLongPress());
+  let release; const gate = new Promise(resolve => { release = resolve; }); h.env.beforeWrite = () => gate;
+  const drag = screen.root.findByType("DraggableFlatList");
+  await h.act(async () => drag.props.onDragEnd({ data: [...drag.props.data].reverse() }));
+  const close = byLabel(screen, "Close exercise reordering"); assert.equal(close.props.disabled, true);
+  await h.act(async () => close.props.onPress());
+  assert.equal(screen.root.findAllByType("DraggableFlatList").length, 1);
+  assert.ok(screen.root.findAllByType("Text").some(node => textOf(node) === "Saving order…"));
+  await h.act(async () => { h.env.beforeWrite = undefined; release(); });
+  assert.deepEqual((await h.env.store.load()).sessions[0].exercises, [...props.current.exercises].reverse());
+  await h.act(async () => byLabel(screen, "Close exercise reordering").props.onPress());
+  assert.equal(screen.root.findAllByType("DraggableFlatList").length, 0);
+}));
+
+test("closing after a failed reorder leaves the latest order in memory and a retry action outside the ScrollView", async () => run(async h => {
+  const props = await h.prepare(); const screen = await h.mount("training/ActiveWorkoutScreen.tsx", props);
+  const header = screen.root.find(node => node.type === "Pressable" && node.props.accessibilityLabel?.endsWith(", collapse"));
+  await h.act(async () => header.props.onLongPress()); h.env.storageFailure = true;
+  const drag = screen.root.findByType("DraggableFlatList");
+  await h.act(async () => drag.props.onDragEnd({ data: [...drag.props.data].reverse() }));
+  await h.act(async () => byLabel(screen, "Close exercise reordering").props.onPress());
+  const retry = byLabel(screen, "Retry saving workout edits"); let ancestor = retry.parent;
+  while (ancestor) { assert.notEqual(ancestor.type, "ScrollView"); ancestor = ancestor.parent; }
+  h.env.storageFailure = false; await h.act(async () => retry.props.onPress());
   assert.deepEqual((await h.env.store.load()).sessions[0].exercises, [...props.current.exercises].reverse());
 }));

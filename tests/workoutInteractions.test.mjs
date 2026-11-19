@@ -216,3 +216,40 @@ test("unfinished historical rows retain their ordinal and never shift later perf
   assert.equal(i.previousSetReference([done], current, current.sets[0].id, today.id), null);
   assert.deepEqual(i.previousSetReference([done], current, current.sets[1].id, today.id), { weight: "25", reps: "6", unit: "kg" });
 });
+
+test("a recent Normal-only workout does not hide the most recent matching Failure/Warm-up performance", () => {
+  let prior = complete(fixture().session), e = prior.exercises[0];
+  prior = m.addSet(prior, e.id, "kg", now);
+  prior = m.changeSetType(prior, e.id, prior.exercises[0].sets.at(-1).id, "warmup", now);
+  prior = complete(prior, 0, "12", "5");
+  prior = m.addSet(prior, e.id, "kg", now);
+  prior = m.changeSetType(prior, e.id, prior.exercises[0].sets.at(-1).id, "failure", now);
+  prior = complete(prior, 0, "4", "40");
+  const older = previous(prior);
+  const latest = previous(complete(fixture().session, 0, "9", "20"), "2026-11-18T13:00:00.000Z");
+  let today = fixture().session; const movement = today.exercises[0], setId = movement.sets[0].id;
+  today = m.changeSetType(today, movement.id, setId, "failure", now);
+  assert.deepEqual(i.previousSetReference([older, latest], today.exercises[0], setId, today.id), { weight: "40", reps: "4", unit: "kg" });
+  today = m.changeSetType(today, movement.id, setId, "warmup", now);
+  assert.equal(i.previousSetReference([older, latest], today.exercises[0], setId, today.id).weight, "5");
+  today = m.changeSetType(today, movement.id, setId, "normal", now);
+  assert.equal(i.previousSetReference([older, latest], today.exercises[0], setId, today.id).weight, "20");
+  assert.equal(m.previousPerformance([older, latest], movement.exerciseId, today.id)[0].weightKg, 20);
+  assert.equal(today.exercises[0].sets[0].draft.weight, "");
+});
+
+test("reference lookup preserves occurrence positions when falling back past an unfinished matching set", () => {
+  let prior = fixture().session, e = prior.exercises[0];
+  prior = m.changeSetType(prior, e.id, e.sets[0].id, "failure", now); prior = complete(prior, 0, "5", "30");
+  prior = m.addSet(prior, e.id, "kg", now); prior = m.changeSetType(prior, e.id, prior.exercises[0].sets[1].id, "failure", now); prior = complete(prior, 0, "6", "35");
+  const old = previous(prior);
+  const newer = structuredClone(old); newer.id = "newer"; newer.completedAt = "2026-11-18T13:00:00.000Z";
+  newer.exercises[0].sets[0].completed = false;
+  newer.exercises[0].sets[1].weightKg = 40;
+  let today = fixture().session; const movement = today.exercises[0];
+  today = m.changeSetType(today, movement.id, movement.sets[0].id, "failure", now);
+  today = m.addSet(today, movement.id, "kg", now); today = m.changeSetType(today, movement.id, today.exercises[0].sets[1].id, "failure", now);
+  const refs = today.exercises[0].sets.map(set => i.previousSetReference([newer, old], today.exercises[0], set.id, today.id));
+  assert.deepEqual(refs.map(ref => ref.weight), ["30", "40"]);
+  assert.ok(today.exercises[0].sets.every(set => !set.completed && set.weightKg === null && set.draft.weight === ""));
+});

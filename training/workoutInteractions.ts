@@ -47,15 +47,19 @@ export function reorderExercises(session: WorkoutSession, ids: readonly string[]
 }
 
 // Match the ordinal within each set type, not a shifted table row. Only completed
-// sets from the latest completed workout provide values; unfinished rows retain
-// their position but never provide a reference. Draft strings never do.
+// sets from the latest relevant completed workout provide values. Unfinished
+// rows retain their position but never provide a reference. Draft strings never do.
 export function previousSetReference(sessions: readonly WorkoutSession[], exercise: SessionExercise, setId: string, currentId: string, unit?: WeightUnit) {
   const index = exercise.sets.findIndex((set) => set.id === setId);
   if (index < 0) return null;
   const current = exercise.sets[index];
   const type = setType(current);
   const ordinal = exercise.sets.slice(0, index).filter((set) => setType(set) === type).length;
-  const previous = previousExerciseSets(sessions, exercise.exerciseId, currentId).filter((set) => setType(set) === type)[ordinal];
+  const previous = previousExerciseSets(sessions, exercise.exerciseId, currentId, sets => {
+    const match = sets.filter(set => setType(set) === type)[ordinal];
+    return !!match?.completed && Number.isSafeInteger(match.reps) && match.reps! > 0 &&
+      (match.weightKg === null || (Number.isFinite(match.weightKg) && match.weightKg >= 0));
+  }).filter((set) => setType(set) === type)[ordinal];
   if (!previous?.completed || previous.reps === null || !Number.isSafeInteger(previous.reps) || previous.reps < 1) return null;
   const weight = previous.weightKg !== null && Number.isFinite(previous.weightKg) && previous.weightKg >= 0
     ? displayWeight(previous.weightKg, unit ?? current.draft.weightUnit) : null;
